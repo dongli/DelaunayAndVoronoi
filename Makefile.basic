@@ -5,7 +5,7 @@ ROOT_DIR = $(dir $(shell pwd))
 VPATH = ${ROOT_DIR}/Util:${ROOT_DIR}/Core
 
 # fortran compiler options
-FC = gfortran
+FC = ifort
 ifeq ($(FC), ifort)
 FFLAGS = -fp-model precise -fp-speculation=safe -fpe0
 DEBUG_FLAGS = -g -DDEBUG -check bounds -traceback

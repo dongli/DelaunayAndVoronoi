@@ -24,10 +24,10 @@ do
         mapRes@mpGreatCircleLinesOn = True
         mapRes@mpGridAndLimbOn = True
         mapRes@mpGridLineColor = "Background"
-        ;mapRes@mpProjection = "Satellite"
-        ;mapRes@mpCenterLonF = 70.0
-        ;mapRes@mpCenterLatF = 60.0
-        mapRes@mpProjection = "Stereographic"
+        mapRes@mpProjection = "Satellite"
+        mapRes@mpCenterLonF = 60.0
+        mapRes@mpCenterLatF = 45.0
+        ;mapRes@mpProjection = "Stereographic"
 
         map = gsn_csm_map(wks, mapRes)
 
@@ -46,7 +46,7 @@ do
             gsn_polyline(wks, map, lon, lat, edgeRes)
         end do
 
-        if (False) then
+        if (True) then
             ; Plot circumcirlces
             circRes = True
             circRes@gsLineThicknessF = 2.

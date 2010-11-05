@@ -54,6 +54,8 @@ module DelaunayAndVoronoi
     public DelaunayAndVoronoi_LinkSample
     public ConstructDelaunayTriangulation
     public DelaunayAndVoronoi_Output
+    public ExtractVoronoiDiagram
+    public DelaunayAndVoronoi_Report
 
     ! ======================================================================= !
     ! Derived data types
@@ -119,21 +121,22 @@ module DelaunayAndVoronoi
 
     ! ======================================================================= !
     ! Voronoi diagram data structure
-    type VoronoiVertex
-        ! For debug
-        integer :: id = -1
-    end type VoronoiVertex
-
     type VoronoiCell
         ! For debug
         integer :: id = -1
-    
+        ! For geometry
+        integer :: numVVT
+        real(8), allocatable :: lonVVT(:), latVVT(:)
+        type(VoronoiCell), pointer :: prev => null()
+        type(VoronoiCell), pointer :: next => null()
     end type VoronoiCell
 
     ! Data
+    ! Delaunay vertex
     integer :: numDVT = 0
     type(DelaunayVertex), pointer :: DVTHead, DVTCurr
     type(DelaunayVertexPointer) VirtualDVT(3)
+    ! Delaunay triangle
     integer :: numDT = 0, numTotalDT = 0
     type(DelaunayTriangle), pointer :: DTHead, DTCurr
     ! Obsolete DT record list
@@ -146,6 +149,9 @@ module DelaunayAndVoronoi
     !          2) For updating point-in-triangle relation
     integer :: numTmpDT = 0 ! Record list of temporal DT
     type(DelaunayTrianglePointerList), pointer :: tmpDTHead, tmpDTCurr
+    ! Voronoi cell
+    integer :: numVC = 0
+    type(VoronoiCell), pointer :: VCHead
 
     ! ======================================================================= !
     ! Constant
@@ -167,12 +173,12 @@ contains
     subroutine DelaunayAndVoronoi_LinkSample
         type(Sample), pointer :: SMP
         type(DelaunayVertex), pointer :: DVT1, DVT2
+        type(VoronoiCell), pointer :: VC1, VC2
         integer i
 
         call MsgManager_RecordSpeaker("DelaunayAndVoronoi_LinkSample")
 
         numDVT = numSample
-
         SMP => SMPHead
         allocate(DVTHead)
         DVTHead%id = 1
@@ -191,6 +197,26 @@ contains
             DVT2 => DVT1
         end do
         DVTCurr => DVTHead
+
+        numVC = numSample
+        allocate(VCHead)
+        VCHead%id = 1
+        VCHead%numVVT = 1
+        allocate(VCHead%lonVVT(1))
+        allocate(VCHead%latVVT(1))
+        VC1 => VCHead
+        VC2 => VCHead
+        do i = 2, numVC
+            allocate(VC1%next)
+            VC1 => VC1%next
+            VC1%id = i
+            VC1%numVVT = 1
+            allocate(VC1%lonVVT(1))
+            allocate(VC1%latVVT(1))
+            VC1%prev => VC2
+            VC2%next => VC1
+            VC2 => VC1
+        end do
 
         call MsgManager_Speak(Notice, "Finished.")
         call MsgManager_DeleteSpeaker
@@ -493,6 +519,8 @@ contains
                     exit
                 end if
             end do
+            print *, "[fix me]: Without printing out DVT ID "// &
+                trim(int2str(DVT%id))//", SIGBUS error (ifort) will occur!"
             call SplitIncidentTriangle(DVT1, oldDT1, newDT(1)%ptr, newDT(3)%ptr)
             call SplitIncidentTriangle(DVT2, oldDT1, newDT(2)%ptr, newDT(1)%ptr)
             call SplitIncidentTriangle(DVT3, oldDT1, newDT(3)%ptr, newDT(2)%ptr)
@@ -799,20 +827,34 @@ contains
         ! Calculate the circumcenter and circumradius
         call CalcCircumcircle
 
-        ! Testing ...
-        !DT1 => DTHead
-        !do i = 1, numDT
-        !    call PrintTriangleTopology(DT1)
-        !    DT1 => DT1%next
-        !end do
-        !print *, "-------------------------"
-        !DVT => DVTHead
-        !do i = 1, numDVT
-        !    call PrintVertexTopology(DVT)
-        !    DVT => DVT%next
-        !end do
-
     end subroutine ConstructDelaunayTriangulation
+
+    subroutine ExtractVoronoiDiagram
+        type(DelaunayVertex), pointer :: DVT
+        type(VoronoiCell), pointer :: VC
+        type(DelaunayTrianglePointerList), pointer :: icdDT
+        integer i, j
+
+        DVT => DVTHead
+        VC => VCHead
+        do i = 1, numDVT ! = numVC
+            if (VC%numVVT /= DVT%numIcdDT) then
+                deallocate(VC%lonVVT)
+                deallocate(VC%latVVT)
+                VC%numVVT = DVT%numIcdDT
+                allocate(VC%lonVVT(VC%numVVT))
+                allocate(VC%latVVT(VC%numVVT))
+            end if
+            icdDT => DVT%icdDTHead
+            do j = 1, DVT%numIcdDT
+                VC%lonVVT(j) = icdDT%ptr%clon
+                VC%latVVT(j) = icdDT%ptr%clat
+                icdDT => icdDT%next
+            end do
+            VC => VC%next
+        end do
+
+    end subroutine ExtractVoronoiDiagram
     
     ! ************************************************************************ !
     ! Orient                                                                   !
@@ -822,7 +864,7 @@ contains
     !   (x2,y2,z2), and (0,0,0). There are three types of relation, i.e. left, !
     !   right, and on, where left is defined relative to an observer at        !
     !   (x1,y1,z1) facing (x2,y2,z2).                                          !
-    ! ************************************************************************ ! 
+    ! ************************************************************************ !
 
     integer function Orient(x1, y1, z1, x2, y2, z2, x0, y0, z0)
         real(8), intent(in) :: x1, y1, z1, x2, y2, z2, x0, y0, z0
@@ -1378,6 +1420,32 @@ contains
 
     end subroutine DeleteTemporalTriangle
 
+    subroutine DelaunayAndVoronoi_Report()
+        type(DelaunayTriangle), pointer :: DT
+        type(DelaunayVertex), pointer :: DVT
+        type(VoronoiCell), pointer :: VC
+        integer i
+
+        DT => DTHead
+        do i = 1, numDT
+            call PrintTriangleTopology(DT)
+            DT => DT%next
+        end do
+        print *, "-------------------------"
+        DVT => DVTHead
+        do i = 1, numDVT
+            call PrintVertexTopology(DVT)
+            DVT => DVT%next
+        end do
+        print *, "-------------------------"
+        VC => VCHead
+        do i = 1, numVC
+            call PrintVoronoiCell(VC)
+            VC => VC%next
+        end do
+    
+    end subroutine DelaunayAndVoronoi_Report
+    
     subroutine PrintTriangleTopology(DT)
         type(DelaunayTriangle), intent(in) :: DT
 
@@ -1405,6 +1473,18 @@ contains
         write(*, *)
     
     end subroutine PrintVertexTopology
+
+    subroutine PrintVoronoiCell(VC)
+        type(VoronoiCell), intent(in) :: VC
+        integer i
+
+        write(*, "('Voronoi cell (ID -', I3, ')')") VC%id
+        write(*, "('  Vertex coordinate (in degree): ')")
+        do i = 1, VC%numVVT
+            write(*, "(2F10.3)") VC%lonVVT(i)*Rad2Deg, VC%latVVT(i)*Rad2Deg
+        end do
+    
+    end subroutine PrintVoronoiCell
     
     subroutine PrintTriangleContainedVertex(DT)
         type(DelaunayTriangle), intent(in) :: DT
