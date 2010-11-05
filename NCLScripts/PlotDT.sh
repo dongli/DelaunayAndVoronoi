@@ -13,8 +13,9 @@ do
 
         f = addfile("${file}", "r")
 
-        dims = dimsizes(f->triangle)
-    	numTriangle = dims(0)
+        numPoint = dimsizes(f->lonPoint)
+
+        numTriangle = dimsizes(f->triangle(:,0))
 
         wks = gsn_open_wks("pdf", "${figure}")
 
@@ -31,20 +32,34 @@ do
 
         map = gsn_csm_map(wks, mapRes)
 
-        ; Plot edges
-        edgeRes = True
-        edgeRes@gsLineColor = "blue"
+        if (True) then
+            ; Plot Delaunay triangle edges
+            edgeRes = True
+            edgeRes@gsLineThicknessF = 2.
+            edgeRes@gsLineColor = "blue"
 
-        lon = new(3, "float")
-        lat = new(3, "float")
-        do i = 0, numTriangle-1
-            do j = 0, 2
-                k = f->triangle(i,j)-1
-                lon(j) = f->point_lon(k)
-                lat(j) = f->point_lat(k)
+            lon = new(4, "float")
+            lat = new(4, "float")
+            do i = 0, numTriangle-1
+                numVertex = 0
+                do j = 0, 2
+                    k = f->triangle(i,j)-1
+                    if (k .ge. 0) then
+                        lon(numVertex) = f->lonPoint(k)
+                        lat(numVertex) = f->latPoint(k)
+                        numVertex = numVertex+1
+                    end if
+                end do
+                if (numVertex .gt. 1) then
+                    lon(numVertex) = lon(0)
+                    lat(numVertex) = lat(0)
+                    gsn_polyline(wks, map, lon(0:numVertex), lat(0:numVertex), edgeRes)
+                end if
             end do
-            gsn_polyline(wks, map, lon, lat, edgeRes)
-        end do
+
+            delete(lon)
+            delete(lat)
+        end if
 
         if (True) then
             ; Plot circumcirlces
@@ -55,8 +70,29 @@ do
             arclon = new(50, float)
             arclat = new(50, float)
             do i = 0, numTriangle-1
-                nggcog(f->clat(i), f->clon(i), f->radius(i), arclat, arclon)
+                nggcog(f->latCirc(i), f->lonCirc(i), f->radius(i), arclat, arclon)
                 gsn_polyline(wks, map, arclon, arclat, circRes)
+            end do
+        end if
+
+        if (True) then
+            ; Plot Voronoi cell edges
+            edgeRes = True
+            edgeRes@gsLineThicknessF = 2.
+            edgeRes@gsLineColor = "yellow"
+
+            do i = 0, numPoint-1
+                lon = new(f->numVVT(i)+1, "float")
+                lat = new(f->numVVT(i)+1, "float")
+                do j = 0, f->numVVT(i)-1
+                    lon(j) = f->lonVVT(i,j)
+                    lat(j) = f->latVVT(i,j)
+                end do
+                lon(f->numVVT(i)) = lon(0)
+                lat(f->numVVT(i)) = lat(0)
+                gsn_polyline(wks, map, lon, lat, edgeRes)
+                delete(lon)
+                delete(lat)
             end do
         end if
 
@@ -66,11 +102,15 @@ do
         vertexRes@gsMarkerSizeF = 0.02
         vertexRes@gsMarkerColor = "red"
 
-        gsn_polymarker(wks, map, f->point_lon, f->point_lat, vertexRes)
+        gsn_polymarker(wks, map, f->lonPoint, f->latPoint, vertexRes)
 
         frame(wks)
 
     end
 EOF
-    if [[ $? == 0 ]]; then echo "${figure}.pdf generated."; fi
+    if [ -f "${figure}.pdf" ]; then
+        echo "${figure}.pdf generated."
+    else
+        echo "NCL error!"
+    fi
 done

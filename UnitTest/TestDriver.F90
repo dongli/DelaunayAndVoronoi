@@ -26,8 +26,6 @@ program TestDriver
         lat = [60.0,30.0,30.0,45.0,10.0,55.0,40.0,50.0,35.0]/Rad2Deg
     end if
 
-    
-
     call SampleManager_Init(n)
     call SampleManager_Set(lon, lat)
     call DelaunayAndVoronoi_LinkSample

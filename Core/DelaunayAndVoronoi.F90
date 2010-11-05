@@ -105,8 +105,8 @@ module DelaunayAndVoronoi
         ! For topology
         type(DelaunayVertexPointer) DVT(3)
         type(DelaunayTrianglePointer) adjDT(3) ! Three adjacent DTs
-        real(8) clon, clat ! Center of circumcircle
-        real(8) radius ! Radius of circumcircle in degree
+        real(8) lonCirc, latCirc ! Center of circumcircle
+        real(8) radius ! Radius of circumcircle in radian
         ! For validation
         integer :: numSubDT = 0 ! the number of subdivided triangles
         type(DelaunayTrianglePointer) subDT(3) ! Subdivided DTs (at most three)
@@ -167,6 +167,7 @@ module DelaunayAndVoronoi
     ! ======================================================================== !
     ! Auxiliary data
     type(FileCard) fcard
+    integer maxNumVVT
 
 contains
 
@@ -534,7 +535,7 @@ contains
             end do
 #if (defined DEBUG && defined OUTPUTSTAGE)
             ! Testing output ...
-            call DelaunayAndVoronoi_Output("stage2-"//trim(int2str(DVT%id))//".nc")
+            call DelaunayAndVoronoi_Output("stage2-"trim(int2str(DVT%id))//".nc")
 #endif
             ! Record the obsolete triangle .............................. STEP 6
             call RecordObsoleteTriangle(oldDT1)
@@ -829,15 +830,23 @@ contains
 
     end subroutine ConstructDelaunayTriangulation
 
+    ! ************************************************************************ !
+    ! ExtractVoronoiDiagram                                                    !
+    ! Purpose:                                                                 !
+    !   Get the dual (Voronoi diagram) of Delaunay triangulation.              !
+    ! ************************************************************************ !
+
     subroutine ExtractVoronoiDiagram
         type(DelaunayVertex), pointer :: DVT
         type(VoronoiCell), pointer :: VC
         type(DelaunayTrianglePointerList), pointer :: icdDT
         integer i, j
 
+        maxNumVVT = 0
         DVT => DVTHead
         VC => VCHead
         do i = 1, numDVT ! = numVC
+            if (DVT%numIcdDT > maxNumVVT) maxNumVVT = DVT%numIcdDT
             if (VC%numVVT /= DVT%numIcdDT) then
                 deallocate(VC%lonVVT)
                 deallocate(VC%latVVT)
@@ -847,10 +856,11 @@ contains
             end if
             icdDT => DVT%icdDTHead
             do j = 1, DVT%numIcdDT
-                VC%lonVVT(j) = icdDT%ptr%clon
-                VC%latVVT(j) = icdDT%ptr%clat
+                VC%lonVVT(j) = icdDT%ptr%lonCirc
+                VC%latVVT(j) = icdDT%ptr%latCirc
                 icdDT => icdDT%next
             end do
+            DVT => DVT%next
             VC => VC%next
         end do
 
@@ -1006,22 +1016,22 @@ contains
             end if
             L = sqrt(L)
             C = N/L*Re
-            call InverseCartesianTransform(DT%clon, DT%clat, C(1), C(2), C(3))
+            call InverseCartesianTransform(DT%lonCirc, DT%latCirc, C(1), C(2), C(3))
             tmp = (DT%DVT(1)%ptr%SMP%x*C(1)+ &
                    DT%DVT(1)%ptr%SMP%y*C(2)+ &
                    DT%DVT(1)%ptr%SMP%z*C(3))/Re**2
-            DT%radius = acos(tmp)*Rad2Deg
+            DT%radius = acos(tmp)
             DT => DT%next
         end do
 
     end subroutine CalcCircumcircle
     
-    ! ************************************************************************ ! 
-    ! NewDelaunayTriangle
-    ! Purpose:
-    !   Create the storage of a new Delaunay triangle in the double linked 
-    !   list.
-    ! ************************************************************************ ! 
+    ! ************************************************************************ !
+    ! NewDelaunayTriangle                                                      !
+    ! Purpose:                                                                 !
+    !   Create the storage of a new Delaunay triangle in the double linked     !
+    !   list.                                                                  !
+    ! ************************************************************************ !
 
     subroutine NewDelaunayTriangle(DT)
         type(DelaunayTriangle), intent(out), pointer :: DT
@@ -1094,7 +1104,7 @@ contains
         end if
     
     end subroutine RecordIncidentTriangle
-    
+
     subroutine ReplaceIncidentTriangle(DVT, oldDT, newDT)
         type(DelaunayVertex), intent(inout) :: DVT
         type(DelaunayTriangle), intent(in), target :: oldDT, newDT
@@ -1437,12 +1447,12 @@ contains
             call PrintVertexTopology(DVT)
             DVT => DVT%next
         end do
-        print *, "-------------------------"
-        VC => VCHead
-        do i = 1, numVC
-            call PrintVoronoiCell(VC)
-            VC => VC%next
-        end do
+        !print *, "-------------------------"
+        !VC => VCHead
+        !do i = 1, numVC
+        !    call PrintVoronoiCell(VC)
+        !    VC => VC%next
+        !end do
     
     end subroutine DelaunayAndVoronoi_Report
     
@@ -1464,7 +1474,7 @@ contains
         integer i
 
         write(*, "('Vertex (ID -', I3, ')')") DVT%id
-        write(*, "('  Incident triangle ID: ')")
+        write(*, "('  Incident triangle ID: ')", advance="no")
         icdDT => DVT%icdDTHead
         do i = 1, DVT%numIcdDT
             write(*, "(I3)", advance="no") icdDT%ptr%id
@@ -1533,16 +1543,20 @@ contains
         character(*), intent(in) :: filePath
 
         real(4), allocatable :: lon(:), lat(:)
-        real(4), allocatable :: clon(:), clat(:), radius(:)
+        real(4), allocatable :: lonCirc(:), latCirc(:), radius(:)
         integer, allocatable :: triangle(:,:)
+        real(4), allocatable :: lonVVT(:,:), latVVT(:,:)
+        integer, allocatable :: numVVT(:)
         type(DelaunayVertex), pointer :: DVT
         type(DelaunayTriangle), pointer :: DT
+        type(VoronoiCell), pointer :: VC
+        integer, save :: tag = 0
         integer i, j
 
         call MsgManager_RecordSpeaker("DelaunayAndVoronoi_Output")
 
-        allocate(lon(numDVT+3))
-        allocate(lat(numDVT+3))
+        allocate(lon(numDVT))
+        allocate(lat(numDVT))
 
         DVT => DVTHead
         do i = 1, numDVT
@@ -1550,85 +1564,100 @@ contains
             lat(i) = real(DVT%SMP%lat*Rad2Deg)
             DVT => DVT%next
         end do
-        do i = 1, 3
-            lon(numDVT+i) = real(VirtualDVT(i)%ptr%SMP%lon*Rad2Deg)
-            lat(numDVT+i) = real(VirtualDVT(i)%ptr%SMP%lat*Rad2Deg)
-        end do
 
-        allocate(clon(numDT))
-        allocate(clat(numDT))
+        allocate(lonCirc(numDT))
+        allocate(latCirc(numDT))
         allocate(radius(numDT))
 
         allocate(triangle(3,numDT))
 
         DT => DTHead
         do i = 1, numDT
-            clon(i) = real(DT%clon*Rad2Deg)
-            clat(i) = real(DT%clat*Rad2Deg)
-            radius(i) = real(DT%radius)
             do j = 1, 3
-                if (DT%DVT(j)%ptr%id < 0) then
-                    triangle(j,i) = numDVT-DT%DVT(j)%ptr%id
-                else
-                    triangle(j,i) = DT%DVT(j)%ptr%id
-                end if
+                triangle(j,i) = DT%DVT(j)%ptr%id
             end do
+            lonCirc(i) = real(DT%lonCirc*Rad2Deg)
+            latCirc(i) = real(DT%latCirc*Rad2Deg)
+            radius(i) = real(DT%radius*Rad2Deg)
             DT => DT%next
         end do
 
-        call NFWrap_CreateIrregular(filePath, timeVariant=.false., card=fcard)
-        call NFWrap_NewDim(fcard, "num_point", numDVT+3)
-        call NFWrap_NewDim(fcard, "num_triangle", numDT)
-        call NFWrap_NewDim(fcard, "num_vertex", 3)
+        allocate(lonVVT(maxNumVVT,numVC))
+        allocate(latVVT(maxNumVVT,numVC))
+        allocate(numVVT(numVC))
+
+        VC => VCHead
+        do j = 1, numVC
+            do i = 1, VC%numVVT
+                lonVVT(i,j) = real(VC%lonVVT(i)*Rad2Deg)
+                latVVT(i,j) = real(VC%latVVT(i)*Rad2Deg)
+            end do
+            numVVT(j) = VC%numVVT
+            VC => VC%next
+        end do
+
+        tag = tag+1
+        call NFWrap_CreateIrregular(trim(int2str(tag))//"_"//filePath, &
+            timeVariant=.false., card=fcard)
+        call NFWrap_NewDim(fcard, "numPoint", numDVT)
+        call NFWrap_NewDim(fcard, "numTriangle", numDT)
+        call NFWrap_NewDim(fcard, "numTriangleVertex", 3)
+        call NFWrap_NewDim(fcard, "maxNumVoronoiCellVertex", maxNumVVT)
         call NFWrap_New1DVar(fcard, &
-            varName="point_lon", &
-            dataType="float", &
-            dimName="num_point", &
+            varName="lonPoint", dataType="float", &
+            dimName="numPoint", &
             longName="Point longitude", &
-            unitName="Degree_E", &
-            timeVariant=.false.)
+            unitName="degree_east", timeVariant=.false.)
         call NFWrap_New1DVar(fcard, &
-            varName="point_lat", &
-            dataType="float", &
-            dimName="num_point", &
+            varName="latPoint", dataType="float", &
+            dimName="numPoint", &
             longName="Point latitude", &
-            unitName="Degree_N", &
-            timeVariant=.false.)
+            unitName="degree_north", timeVariant=.false.)
         call NFWrap_New1DVar(fcard, &
-            varName="clon", &
-            dataType="float", &
-            dimName="num_triangle", &
+            varName="lonCirc", dataType="float", &
+            dimName="numTriangle", &
             longName="Circumcenter longitude", &
-            unitName="Degree_E", &
-            timeVariant=.false.)
+            unitName="degree_east", timeVariant=.false.)
         call NFWrap_New1DVar(fcard, &
-            varName="clat", &
-            dataType="float", &
-            dimName="num_triangle", &
+            varName="latCirc", dataType="float", &
+            dimName="numTriangle", &
             longName="Circumcenter latitude", &
-            unitName="Degree_N", &
-            timeVariant=.false.)
+            unitName="degree_north", timeVariant=.false.)
         call NFWrap_New1DVar(fcard, &
-            varName="radius", &
-            dataType="float", &
-            dimName="num_triangle", &
+            varName="radius", dataType="float", &
+            dimName="numTriangle", &
             longName="Circumradius", &
-            unitName="Degree", &
-            timeVariant=.false.)
+            unitName="degree", timeVariant=.false.)
         call NFWrap_New2DVar(fcard, &
-            varName="triangle", &
-            dataType="integer", &
-            dimName1="num_vertex", &
-            dimName2="num_triangle", &
+            varName="triangle", dataType="integer", &
+            dimName1="numTriangleVertex", dimName2="numTriangle", &
             longName="Triangle vertex index", &
             unitName="", &
             timeVariant=.false.)
-        call NFWrap_Output1DVar(fcard, "point_lon", lon)
-        call NFWrap_Output1DVar(fcard, "point_lat", lat)
-        call NFWrap_Output1DVar(fcard, "clon", clon)
-        call NFWrap_Output1DVar(fcard, "clat", clat)
+        call NFWrap_New1DVar(fcard, &
+            varName="numVVT", dataType="integer", &
+            dimName="numPoint", &
+            longName="Real Voronoi cell vertex number", &
+            unitName="", timeVariant=.false.)
+        call NFWrap_New2DVar(fcard, &
+            varName="lonVVT", dataType="float", &
+            dimName1="maxNumVoronoiCellVertex", dimName2="numPoint", &
+            longName="Voronoi cell vertex longitude", &
+            unitName="degree_east", timeVariant=.false.)
+        call NFWrap_New2DVar(fcard, &
+            varName="latVVT", dataType="float", &
+            dimName1="maxNumVoronoiCellVertex", dimName2="numPoint", &
+            longName="Voronoi cell vertex latitude", &
+            unitName="degree_north", timeVariant=.false.)
+        call NFWrap_Output1DVar(fcard, "lonPoint", lon)
+        call NFWrap_Output1DVar(fcard, "latPoint", lat)
+        call NFWrap_Output1DVar(fcard, "lonCirc", lonCirc)
+        call NFWrap_Output1DVar(fcard, "latCirc", latCirc)
         call NFWrap_Output1DVar(fcard, "radius", radius)
         call NFWrap_Output2DVar(fcard, "triangle", triangle)
+        call NFWrap_Output1DVar(fcard, "numVVT", numVVT)
+        call NFWrap_Output2DVar(fcard, "lonVVT", lonVVT)
+        call NFWrap_Output2DVar(fcard, "latVVT", latVVT)
         call NFWrap_Close(fcard)
 
         call MsgManager_Speak(Notice, "File "//trim(filePath)//" is generated.")

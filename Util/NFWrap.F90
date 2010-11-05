@@ -11,13 +11,13 @@ module NFWrap
 
     type Dimension
         integer id
-        character(20) name
+        character(50) name
         integer size
     end type Dimension
 
     type Variable
         integer id
-        character(20) name
+        character(50) name
         integer numDim
         integer, allocatable :: dimSize(:)
         integer, allocatable :: dimId(:)
@@ -613,9 +613,15 @@ contains
 
         call card%getVar(varName, var)
 
-        if (dimSize(1) /= var%dimSize(1) .or. dimSize(2) /= var%dimSize(2)) then
+        if (dimSize(1) /= var%dimSize(1)) then
             call MsgManager_Speak(Error, &
-                "Output variable """//trim(varName)//""": Dimension not match!")
+                "Output variable """//trim(varName)//""": First dimension not match ("//&
+                trim(int2str(dimSize(1)))//" /= "//trim(int2str(var%dimSize(1)))//")!")
+            call RunManager_EndRun
+        else if (dimSize(2) /= var%dimSize(2)) then
+            call MsgManager_Speak(Error, &
+                "Output variable """//trim(varName)//""": Second dimension not match ("//&
+                trim(int2str(dimSize(2)))//" /= "//trim(int2str(var%dimSize(2)))//")!")
             call RunManager_EndRun
         end if
 
@@ -649,9 +655,15 @@ contains
 
         call card%getVar(varName, var)
 
-        if (dimSize(1) /= var%dimSize(1) .or. dimSize(2) /= var%dimSize(2)) then
+        if (dimSize(1) /= var%dimSize(1)) then
             call MsgManager_Speak(Error, &
-                "Output variable """//trim(varName)//""": Dimension not match!")
+                "Output variable """//trim(varName)//""": First dimension not match ("//&
+                trim(int2str(dimSize(1)))//" /= "//trim(int2str(var%dimSize(1)))//")!")
+            call RunManager_EndRun
+        else if (dimSize(2) /= var%dimSize(2)) then
+            call MsgManager_Speak(Error, &
+                "Output variable """//trim(varName)//""": Second dimension not match ("//&
+                trim(int2str(dimSize(2)))//" /= "//trim(int2str(var%dimSize(2)))//")!")
             call RunManager_EndRun
         end if
 
@@ -685,9 +697,15 @@ contains
 
         call card%getVar(varName, var)
 
-        if (dimSize(1) /= var%dimSize(1) .or. dimSize(2) /= var%dimSize(2)) then
+        if (dimSize(1) /= var%dimSize(1)) then
             call MsgManager_Speak(Error, &
-                "Output variable """//trim(varName)//""": Dimension not match!")
+                "Output variable """//trim(varName)//""": First dimension not match ("//&
+                trim(int2str(dimSize(1)))//" /= "//trim(int2str(var%dimSize(1)))//")!")
+            call RunManager_EndRun
+        else if (dimSize(2) /= var%dimSize(2)) then
+            call MsgManager_Speak(Error, &
+                "Output variable """//trim(varName)//""": Second dimension not match ("//&
+                trim(int2str(dimSize(2)))//" /= "//trim(int2str(var%dimSize(2)))//")!")
             call RunManager_EndRun
         end if
 
