@@ -520,8 +520,6 @@ contains
                     exit
                 end if
             end do
-            print *, "[fix me]: Without printing out DVT ID "// &
-                trim(int2str(DVT%id))//", SIGBUS error (ifort) will occur!"
             call SplitIncidentTriangle(DVT1, oldDT1, newDT(1)%ptr, newDT(3)%ptr)
             call SplitIncidentTriangle(DVT2, oldDT1, newDT(2)%ptr, newDT(1)%ptr)
             call SplitIncidentTriangle(DVT3, oldDT1, newDT(3)%ptr, newDT(2)%ptr)
@@ -668,16 +666,15 @@ contains
     recursive subroutine UpdatePointInTriangle(DVT, DT, found)
         type(DelaunayVertex), intent(inout) :: DVT
         type(DelaunayTriangle), intent(inout), target :: DT
-        logical, intent(inout), optional :: found
+        logical, intent(inout) :: found
     
-        logical realFound
         integer i, ret, onPlane(2)
 
         if (DT%numSubDT /= 0) then
             ! DT has been subdivided, go to next level ................. ENTRY 1
             do i = 1, DT%numSubDT
-                call UpdatePointInTriangle(DVT, DT%subDT(i)%ptr, realFound)
-                if (realFound) return
+                call UpdatePointInTriangle(DVT, DT%subDT(i)%ptr, found)
+                if (found) return
             end do
         else
             ! DT is at the last level without being subdivided ......... ENTRY 2
@@ -739,6 +736,7 @@ contains
     subroutine ConstructDelaunayTriangulation
         type(DelaunayVertex), pointer :: DVT
         type(DelaunayTriangle), pointer :: DT1, DT2
+        logical found
         integer i, j, k, ret
     
         call MsgManager_RecordSpeaker("ConstructDelaunayTriangulation")
@@ -809,7 +807,7 @@ contains
                 obsDTCurr%ptr%incDVTCurr => obsDTCurr%ptr%incDVTHead
                 do k = 1, obsDTCurr%ptr%numIncDVT
                     call UpdatePointInTriangle( &
-                        obsDTCurr%ptr%incDVTCurr%ptr, obsDTCurr%ptr)
+                        obsDTCurr%ptr%incDVTCurr%ptr, obsDTCurr%ptr, found)
                     obsDTCurr%ptr%incDVTCurr => obsDTCurr%ptr%incDVTCurr%next
                 end do
                 obsDTCurr => obsDTCurr%next

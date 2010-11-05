@@ -61,7 +61,7 @@ do
             delete(lat)
         end if
 
-        if (True) then
+        if (False) then
             ; Plot circumcirlces
             circRes = True
             circRes@gsLineThicknessF = 2.
