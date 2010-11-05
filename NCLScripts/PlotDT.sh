@@ -22,9 +22,12 @@ do
         mapRes = True
         mapRes@gsnFrame = False
         mapRes@mpGreatCircleLinesOn = True
-        mapRes@mpProjection = "Satellite"
-        mapRes@mpCenterLonF = 70.0
-        mapRes@mpCenterLatF = 60.0
+        mapRes@mpGridAndLimbOn = True
+        mapRes@mpGridLineColor = "Background"
+        ;mapRes@mpProjection = "Satellite"
+        ;mapRes@mpCenterLonF = 70.0
+        ;mapRes@mpCenterLatF = 60.0
+        mapRes@mpProjection = "Stereographic"
 
         map = gsn_csm_map(wks, mapRes)
 
@@ -43,17 +46,19 @@ do
             gsn_polyline(wks, map, lon, lat, edgeRes)
         end do
 
-        ; Plot circumcirlces
-        circRes = True
-        circRes@gsLineThicknessF = 2.
-        circRes@gsLineColor = "green"
+        if (False) then
+            ; Plot circumcirlces
+            circRes = True
+            circRes@gsLineThicknessF = 2.
+            circRes@gsLineColor = "green"
 
-        arclon = new(50, float)
-        arclat = new(50, float)
-        do i = 0, numTriangle-1
-            nggcog(f->clat(i), f->clon(i), f->radius(i), arclat, arclon)
-            gsn_polyline(wks, map, arclon, arclat, circRes)
-        end do
+            arclon = new(50, float)
+            arclat = new(50, float)
+            do i = 0, numTriangle-1
+                nggcog(f->clat(i), f->clon(i), f->radius(i), arclat, arclon)
+                gsn_polyline(wks, map, arclon, arclat, circRes)
+            end do
+        end if
 
         ; Plot vertices
         vertexRes = True

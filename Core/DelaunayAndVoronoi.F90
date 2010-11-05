@@ -401,10 +401,18 @@ contains
             call ReplaceIncidentTriangle(DVT3, oldDT2, newDT(4)%ptr)
             call SplitIncidentTriangle(DVT1, oldDT1, newDT(2)%ptr, newDT(1)%ptr)
             call SplitIncidentTriangle(DVT4, oldDT2, newDT(4)%ptr, newDT(3)%ptr)
+#if (defined DEBUG && defined OUTPUTSTAGE)
+            ! Testing output ...
+            call DelaunayAndVoronoi_Output("stage1-"//trim(int2str(DVT%id))//".nc")
+#endif
             ! Validate the three triangles .............................. STEP 5
             do i = 1, 4
                 call ValidateNewTriangle(newDT(i)%ptr)
             end do
+#if (defined DEBUG && defined OUTPUTSTAGE)
+            ! Testing output ...
+            call DelaunayAndVoronoi_Output("stage2-"//trim(int2str(DVT%id))//".nc")
+#endif
             ! Record the obsolete triangles ............................. STEP 6
             call RecordObsoleteTriangle(oldDT1)
             oldDT1%numSubDT = 2
@@ -488,14 +496,18 @@ contains
             call SplitIncidentTriangle(DVT1, oldDT1, newDT(1)%ptr, newDT(3)%ptr)
             call SplitIncidentTriangle(DVT2, oldDT1, newDT(2)%ptr, newDT(1)%ptr)
             call SplitIncidentTriangle(DVT3, oldDT1, newDT(3)%ptr, newDT(2)%ptr)
+#if (defined DEBUG && defined OUTPUTSTAGE)
             ! Testing output ...
-            !call DelaunayAndVoronoi_Output("bval"//trim(int2str(DVT%id))//".nc")
+            call DelaunayAndVoronoi_Output("stage1-"//trim(int2str(DVT%id))//".nc")
+#endif
             ! Validate the three triangles .............................. STEP 5
             do i = 1, 3
                 call ValidateNewTriangle(newDT(i)%ptr)
             end do
+#if (defined DEBUG && defined OUTPUTSTAGE)
             ! Testing output ...
-            !call DelaunayAndVoronoi_Output("aval"//trim(int2str(DVT%id))//".nc")
+            call DelaunayAndVoronoi_Output("stage2-"//trim(int2str(DVT%id))//".nc")
+#endif
             ! Record the obsolete triangle .............................. STEP 6
             call RecordObsoleteTriangle(oldDT1)
             oldDT1%numSubDT = 3
@@ -710,8 +722,10 @@ contains
         !       are seven other virtual triangles accompanying the one real 
         !       triangle.
         call InitDelaunayTriangle
-
-        !call DelaunayAndVoronoi_Output("init.nc")
+#if (defined DEBUG && defined OUTPUTSTAGE)
+        ! Testing output ...
+        call DelaunayAndVoronoi_Output("init.nc")
+#endif
 
         ! Initialize the point-in-triangle relation between the rest vertices
         ! and the created triangles ..................................... STEP 2
@@ -774,8 +788,10 @@ contains
             ! Delete obsolete and temporal triangles .................. STEP 3.3
             call DeleteObsoleteTriangle
             call DeleteTemporalTriangle
+#if (defined DEBUG && defined OUTPUTSTAGE)
             ! Testing output ...
-            !call DelaunayAndVoronoi_Output("after"//trim(int2str(i))//".nc")
+            call DelaunayAndVoronoi_Output("final"//trim(int2str(i))//".nc")
+#endif
             ! Shift the current DVT pointer ........................... STEP 3.4
             DVTCurr => DVTCurr%next
         end do
