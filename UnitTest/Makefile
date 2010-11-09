@@ -1,7 +1,7 @@
 PROJECT_NAME = "Delaunay Triangulation Test Driver"
 DEBUG = yes
-OPTIONS = #-DOUTPUTSTAGE
-TARGET = TestDriver
+OPTIONS = 
+TARGET = TestDriver TestRealData
 OBJECT = MsgManager.o CommonTypes.o RunManager.o FloatingPoint.o \
          SphereService.o SampleManager.o NFWrap.o DelaunayAndVoronoi.o
 

@@ -4,7 +4,7 @@ module FloatingPoint
 
     implicit none
 
-    real(8), parameter :: eps = 1.0D-10
+    real(8), parameter :: eps = 1.0D-16
 
 contains
 

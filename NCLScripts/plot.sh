@@ -3,8 +3,8 @@
 for file in $(ls *.nc)
 do
     figure=$(basename ${file} .nc)
-    echo -n "Plotting ${file} ... "
-    ncl 1> /dev/null <<-EOF
+    echo "Plotting ${file} ... "
+    ncl <<-EOF
     load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
     load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_csm.ncl"
     load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/contributed.ncl"
@@ -21,21 +21,40 @@ do
 
         ; Plot map
         mapRes = True
+        mapRes@gsnDraw = False
         mapRes@gsnFrame = False
         mapRes@mpGreatCircleLinesOn = True
         mapRes@mpGridAndLimbOn = True
         mapRes@mpGridLineColor = "Background"
-        mapRes@mpProjection = "Satellite"
-        mapRes@mpCenterLonF = 60.0
-        mapRes@mpCenterLatF = 45.0
+        ;mapRes@mpProjection = "Satellite"
+        mapRes@mpCenterLonF = 180.0
+        ;mapRes@mpCenterLatF = 45.0
         ;mapRes@mpProjection = "Stereographic"
+        ;mapRes@gsnPolar = "SH"
+        ;mapRes@mpLimitMode = "LatLon"
+        ;mapRes@mpMaxLatF = -70
 
         map = gsn_csm_map(wks, mapRes)
 
+        if (False) then
+            ; Plot vertex indices
+            textRes = True
+            textRes@txFontHeightF = 0.01
+            textRes@txFont = "helvetica-bold"
+
+            do i = 0, numPoint-1
+                text = gsn_add_text(wks, map, sprinti("%d", i+1), f->lonPoint(i)-2, f->latPoint(i)-2, textRes)
+            end do
+        end if
+
+        draw(map)
+
         if (True) then
             ; Plot Delaunay triangle edges
+            system("echo plotting triangle edges ...")
+            
             edgeRes = True
-            edgeRes@gsLineThicknessF = 2.
+            edgeRes@gsLineThicknessF = 1.
             edgeRes@gsLineColor = "blue"
 
             lon = new(4, "float")
@@ -55,6 +74,7 @@ do
                     lat(numVertex) = lat(0)
                     gsn_polyline(wks, map, lon(0:numVertex), lat(0:numVertex), edgeRes)
                 end if
+                system("echo triangle "+i+" done.")
             end do
 
             delete(lon)
@@ -75,7 +95,7 @@ do
             end do
         end if
 
-        if (True) then
+        if (False) then
             ; Plot Voronoi cell edges
             edgeRes = True
             edgeRes@gsLineThicknessF = 2.
@@ -96,13 +116,16 @@ do
             end do
         end if
 
-        ; Plot vertices
-        vertexRes = True
-        vertexRes@gsMarkerIndex = 1
-        vertexRes@gsMarkerSizeF = 0.02
-        vertexRes@gsMarkerColor = "red"
+        if (False) then
+            system("echo plotting vertices")
+            ; Plot vertices
+            vertexRes = True
+            vertexRes@gsMarkerIndex = 1
+            vertexRes@gsMarkerSizeF = 0.02
+            vertexRes@gsMarkerColor = "red"
 
-        gsn_polymarker(wks, map, f->lonPoint, f->latPoint, vertexRes)
+            gsn_polymarker(wks, map, f->lonPoint, f->latPoint, vertexRes)
+        end if
 
         frame(wks)
 

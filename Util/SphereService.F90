@@ -103,4 +103,26 @@ contains
     
     end subroutine InverseCartesianTransform
 
+    subroutine CartesianTransformOnUnitSphere(lon, lat, x, y, z)
+        real(8), intent(in) :: lon, lat
+        real(8), intent(out) :: x, y, z
+
+        real(8) CosLat
+
+        CosLat = cos(lat)
+        x = CosLat*cos(lon)
+        y = CosLat*sin(lon)
+        z = sin(lat)
+
+    end subroutine CartesianTransformOnUnitSphere
+
+    subroutine InverseCartesianTransformOnUnitSphere(lon, lat, x, y, z)
+        real(8), intent(out) :: lon, lat
+        real(8), intent(in) :: x, y, z
+
+        lon = atan2(y, x)
+        lat = asin(z)
+
+    end subroutine InverseCartesianTransformOnUnitSphere
+
 end module SphereService

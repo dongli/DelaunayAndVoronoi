@@ -6,13 +6,16 @@ program TestDriver
 
     implicit none
 
-    integer, parameter :: n = 9
-    real(8) lon(n), lat(n)
-    real(8) dlon
-    integer i
+    integer n
+    real(8), allocatable :: lon(:), lat(:)
+    real(8) dlon, dlat, dlon05, dlat05
+    integer i, j, k
 
     if (.false.) then
         ! Case 1
+        n = 9
+        allocate(lon(n))
+        allocate(lat(n))
         dlon = PI2/(n-1)
         lon = 0.0d0
         lat = PI05
@@ -20,10 +23,29 @@ program TestDriver
             lon(i) = (i-2)*dlon
             lat(i) = PI/3.0d0
         end do
-    else
+    else if (.false.) then
         ! Case 2
+        n = 9
+        allocate(lon(n))
+        allocate(lat(n))
         lon = [45.0,30.0,60.0,45.0,60.0,70.0,31.0,45.0,80.0]/Rad2Deg
         lat = [60.0,30.0,30.0,45.0,10.0,55.0,40.0,50.0,35.0]/Rad2Deg
+    else
+        n = 100
+        allocate(lon(n))
+        allocate(lat(n))
+        dlon = PI2/10
+        dlat = PI/10
+        dlon05 = dlon*0.5d0
+        dlat05 = dlat*0.5d0
+        k = 1
+        do j = 1, 10
+            do i = 1, 10
+                lon(k) = dlon05+i*dlon
+                lat(k) = PI05-dlat05-(j-1)*dlat
+                k = k+1
+            end do
+        end do
     end if
 
     call SampleManager_Init(n)
@@ -32,6 +54,6 @@ program TestDriver
     call ConstructDelaunayTriangulation
     call ExtractVoronoiDiagram
     !call DelaunayAndVoronoi_Report
-    call DelaunayAndVoronoi_Output("test.nc")
+    call DelaunayAndVoronoi_Output("output.nc")
 
 end program TestDriver

@@ -3,13 +3,19 @@
 ********************************************************************************
 Description:
 
-  This is  an implementation of Delaunay triangulation and Voronoi diagram.  The 
-purpose  of  this re-implementation is for considering the efficient update when
-all the data points can move without construct  from  the scratch. It originates
-from the need  of space  tessellation  in my  numerical scheme (TTS) for solving
-linear advection problem.
+  This is an implementation of Delaunay triangulation and Voronoi diagram on the
+  sphere. The purpose of this re-implementation is for considering the efficient
+  update when all the data points can move without construct  from  the scratch.
+  It originates from the need of space tessellation in my numerical scheme (TTS)
+  for solving linear advection problem.
 
 Current Development:
 
   - Only sphere manifold is considered (for atmospheric modelling).
-  - Basic Delaunay triangulation has almost been finished.
+  - Delaunay triangulation and its dual Voronoi diagram are finished.
+
+Directory structure:
+
+  The program is made up by several modules in "Core" and "Util". In "UnitTest",
+  there are some tests can be run. A script in "NCLScripts" can be used to show
+  the output graphically.

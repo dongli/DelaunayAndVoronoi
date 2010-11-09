@@ -57,16 +57,9 @@ module NFWrap
 
 contains
 
-    subroutine NFWrap_HandleError(ierr)
-        integer, intent(in) :: ierr
-
-        if (ierr /= nf90_noerr) then
-            call MsgManager_Speak(Error, &
-                "NetCDF error """//trim(nf90_strerror(ierr))//""".")
-            stop
-        end if
-
-    end subroutine NFWrap_HandleError
+    ! ************************************************************************ !
+    !                         File access interface                            !
+    ! ************************************************************************ !
 
     subroutine NFWrap_CreateSpherical2D(filePath, numLon, numLat, card)
         character(*), intent(in) :: filePath
@@ -249,36 +242,19 @@ contains
 
     end subroutine NFWrap_OpenForRead
 
-    subroutine NFWrap_GetDimSize(card, dimName, dimSize)
-        type(FileCard), intent(inout) :: card
-        character(*), intent(in) :: dimName
-        integer, intent(out) :: dimSize
-
-        type(Dimension), pointer :: dim
-        integer ierr
- 
-        call card%getDim(dimName, dim)
-        dimSize = dim%size
-
-    end subroutine NFWrap_GetDimSize
-    
-    subroutine NFWrap_Advance(card, timeStep, time)
-        type(FileCard), intent(inout) :: card
-        integer, intent(in) :: timeStep
-        real(8), intent(in) :: time
+    subroutine NFWrap_Close(card)
+        type(FileCard), intent(in) :: card
 
         integer ierr
 
-        call MsgManager_RecordSpeaker("NFWrap_Advance")
-    
-        card%timeStep = timeStep+1
+        ierr = nf90_close(card%id)
 
-        ierr = nf90_put_var(card%id, card%timeVarId, time, [card%timeStep])
+    end subroutine NFWrap_Close
     
-        call MsgManager_DeleteSpeaker
-    
-    end subroutine NFWrap_Advance
-    
+    ! ************************************************************************ !
+    !                           Dimension interface                            !
+    ! ************************************************************************ !
+
     subroutine NFWrap_NewDim(card, dimName, dimSize)
         type(FileCard), intent(inout) :: card
         character(*), intent(in) :: dimName
@@ -303,6 +279,23 @@ contains
         call MsgManager_DeleteSpeaker
     
     end subroutine NFWrap_NewDim
+
+    subroutine NFWrap_GetDimSize(card, dimName, dimSize)
+        type(FileCard), intent(inout) :: card
+        character(*), intent(in) :: dimName
+        integer, intent(out) :: dimSize
+
+        type(Dimension), pointer :: dim
+        integer ierr
+ 
+        call card%getDim(dimName, dim)
+        dimSize = dim%size
+
+    end subroutine NFWrap_GetDimSize
+ 
+    ! ************************************************************************ !
+    !                           Variable interface                             !
+    ! ************************************************************************ !
 
     subroutine NFWrap_NewScalar(card, varName, longName, unitName)
         type(FileCard), intent(inout), target :: card
@@ -333,25 +326,6 @@ contains
     
     end subroutine NFWrap_NewScalar
     
-    subroutine NFWrap_OutputScalar(card, varName, varValue)
-        type(FileCard), intent(inout), target :: card
-        character(*), intent(in) :: varName
-        real(8), intent(in) :: varValue
-
-        integer dimSize(1), ierr
-        type(Variable), pointer :: var
-
-        call MsgManager_RecordSpeaker("NFWrap_OutputScalar")
-
-        call card%getVar(varName, var)
-
-        ierr = nf90_put_var(card%id, var%id, varValue, [card%timeStep])
-        call NFWrap_HandleError(ierr)
-
-        call MsgManager_DeleteSpeaker
-    
-    end subroutine NFWrap_OutputScalar
-
     subroutine NFWrap_New1DVar(card, varName, dataType, dimName, &
         longName, unitName, timeVariant)
         type(FileCard), intent(inout), target :: card
@@ -405,145 +379,6 @@ contains
     
     end subroutine NFWrap_New1DVar
 
-    subroutine NFWrap_Output1DIntVar(card, varName, varValue)
-        type(FileCard), intent(inout), target :: card
-        character(*), intent(in) :: varName
-        integer, intent(in) :: varValue(:)
-
-        integer dimSize(1), ierr
-        type(Variable), pointer :: var
-
-        call MsgManager_RecordSpeaker("NFWrap_Output1DVar")
-
-        dimSize = shape(varValue)
-
-        call card%getVar(varName, var)
-
-        if (dimSize(1) /= var%dimSize(1)) then
-            call MsgManager_Speak(Error, &
-                "Output variable """//trim(varName)//""": Dimension not match!")
-            call RunManager_EndRun
-        end if
-
-        if (var%timeVariant) then
-            ierr = nf90_put_var(card%id, var%id, varValue, [1,card%timeStep])
-        else
-            ierr = nf90_put_var(card%id, var%id, varValue)
-        end if
-        call NFWrap_HandleError(ierr)
-
-#if (defined DEBUG)
-        ierr = nf90_sync(card%id)
-        call NFWrap_HandleError(ierr)
-#endif
-
-        call MsgManager_DeleteSpeaker
-    
-    end subroutine NFWrap_Output1DIntVar
-
-    subroutine NFWrap_Output1DFloatVar(card, varName, varValue)
-        type(FileCard), intent(inout), target :: card
-        character(*), intent(in) :: varName
-        real(4), intent(in) :: varValue(:)
-
-        integer dimSize(1), ierr
-        type(Variable), pointer :: var
-
-        call MsgManager_RecordSpeaker("NFWrap_Output1DVar")
-
-        dimSize = shape(varValue)
-
-        call card%getVar(varName, var)
-
-        if (dimSize(1) /= var%dimSize(1)) then
-            call MsgManager_Speak(Error, &
-                "Output variable """//trim(varName)//""": Dimension not match!")
-            call RunManager_EndRun
-        end if
-
-        if (var%timeVariant) then
-            ierr = nf90_put_var(card%id, var%id, varValue, [1,card%timeStep])
-        else
-            ierr = nf90_put_var(card%id, var%id, varValue)
-        end if
-        call NFWrap_HandleError(ierr)
-
-#if (defined DEBUG)
-        ierr = nf90_sync(card%id)
-        call NFWrap_HandleError(ierr)
-#endif
-
-        call MsgManager_DeleteSpeaker
-    
-    end subroutine NFWrap_Output1DFloatVar
-
-    subroutine NFWrap_Output1DDoubleVar(card, varName, varValue)
-        type(FileCard), intent(inout), target :: card
-        character(*), intent(in) :: varName
-        real(8), intent(in) :: varValue(:)
-
-        integer dimSize(1), ierr
-        type(Variable), pointer :: var
-
-        call MsgManager_RecordSpeaker("NFWrap_Output1DVar")
-
-        dimSize = shape(varValue)
-
-        call card%getVar(varName, var)
-
-        if (dimSize(1) /= var%dimSize(1)) then
-            call MsgManager_Speak(Error, &
-                "Output variable """//trim(varName)//""": Dimension not match!")
-            call RunManager_EndRun
-        end if
-
-        if (var%timeVariant) then
-            ierr = nf90_put_var(card%id, var%id, varValue, [1,card%timeStep])
-        else
-            ierr = nf90_put_var(card%id, var%id, varValue)
-        end if
-        call NFWrap_HandleError(ierr)
-
-#if (defined DEBUG)
-        ierr = nf90_sync(card%id)
-        call NFWrap_HandleError(ierr)
-#endif
-
-        call MsgManager_DeleteSpeaker
-    
-    end subroutine NFWrap_Output1DDoubleVar
-
-    subroutine NFWrap_Input1DVar(card, varName, varValue, timeStep)
-        type(FileCard), intent(in), target :: card
-        character(*), intent(in) :: varName
-        real(8), intent(out) :: varValue(:)
-        integer, intent(in), optional :: timeStep
-
-        integer dimSize(1), ierr
-        type(Variable), pointer :: var
-
-        call MsgManager_RecordSpeaker("NFWrap_Input1DVar")
-
-        dimSize = shape(varValue)
-
-        call card%getVar(varName, var)
-
-        if (dimSize(1) /= var%dimSize(1)) then
-            call MsgManager_Speak(Error, &
-                "Output variable """//trim(varName)//""": Dimension not match!")
-            call RunManager_EndRun
-        end if
-
-        if (var%timeVariant .and. present(timeStep)) then
-            ierr = nf90_get_var(card%id, var%id, varValue, [1,timeStep], [dimSize(1),1])
-        else
-            ierr = nf90_get_var(card%id, var%id, varValue)
-        end if
-
-        call MsgManager_DeleteSpeaker
-
-    end subroutine NFWrap_Input1DVar
-    
     subroutine NFWrap_New2DVar(card, varName, dataType, dimName1, dimName2, &
         longName, unitName, timeVariant)
         type(FileCard), intent(inout), target :: card
@@ -599,6 +434,156 @@ contains
 
     end subroutine NFWrap_New2DVar
 
+    subroutine NFWrap_Advance(card, timeStep, time)
+        type(FileCard), intent(inout) :: card
+        integer, intent(in) :: timeStep
+        real(8), intent(in) :: time
+
+        integer ierr
+
+        call MsgManager_RecordSpeaker("NFWrap_Advance")
+    
+        card%timeStep = timeStep+1
+
+        ierr = nf90_put_var(card%id, card%timeVarId, time, [card%timeStep])
+    
+        call MsgManager_DeleteSpeaker
+    
+    end subroutine NFWrap_Advance
+
+    subroutine NFWrap_OutputScalar(card, varName, varValue)
+        type(FileCard), intent(inout), target :: card
+        character(*), intent(in) :: varName
+        real(8), intent(in) :: varValue
+
+        integer dimSize(1), ierr
+        type(Variable), pointer :: var
+
+        call MsgManager_RecordSpeaker("NFWrap_OutputScalar")
+
+        call card%getVar(varName, var)
+
+        ierr = nf90_put_var(card%id, var%id, varValue, [card%timeStep])
+        call NFWrap_HandleError(ierr)
+
+        call MsgManager_DeleteSpeaker
+    
+    end subroutine NFWrap_OutputScalar
+
+    subroutine NFWrap_Output1DIntVar(card, varName, varValue)
+        type(FileCard), intent(inout), target :: card
+        character(*), intent(in) :: varName
+        integer, intent(in) :: varValue(:)
+
+        integer dimSize(1), ierr
+        type(Variable), pointer :: var
+
+        call MsgManager_RecordSpeaker("NFWrap_Output1DVar")
+
+        dimSize = shape(varValue)
+
+        call card%getVar(varName, var)
+
+        if (dimSize(1) /= var%dimSize(1)) then
+            call MsgManager_Speak(Error, &
+                "Output variable """//trim(varName)// &
+                """: Dimension not match! ("//trim(int2str(dimSize(1)))// &
+                " /= "//trim(int2str(var%dimSize(1)))//")")
+            call RunManager_EndRun
+        end if
+
+        if (var%timeVariant) then
+            ierr = nf90_put_var(card%id, var%id, varValue, [1,card%timeStep])
+        else
+            ierr = nf90_put_var(card%id, var%id, varValue)
+        end if
+        call NFWrap_HandleError(ierr)
+
+#if (defined DEBUG)
+        ierr = nf90_sync(card%id)
+        call NFWrap_HandleError(ierr)
+#endif
+
+        call MsgManager_DeleteSpeaker
+    
+    end subroutine NFWrap_Output1DIntVar
+
+    subroutine NFWrap_Output1DFloatVar(card, varName, varValue)
+        type(FileCard), intent(inout), target :: card
+        character(*), intent(in) :: varName
+        real(4), intent(in) :: varValue(:)
+
+        integer dimSize(1), ierr
+        type(Variable), pointer :: var
+
+        call MsgManager_RecordSpeaker("NFWrap_Output1DVar")
+
+        dimSize = shape(varValue)
+
+        call card%getVar(varName, var)
+
+        if (dimSize(1) /= var%dimSize(1)) then
+            call MsgManager_Speak(Error, &
+                "Output variable """//trim(varName)// &
+                """: Dimension not match! ("//trim(int2str(dimSize(1)))// &
+                " /= "//trim(int2str(var%dimSize(1)))//")")
+            call RunManager_EndRun
+        end if
+
+        if (var%timeVariant) then
+            ierr = nf90_put_var(card%id, var%id, varValue, [1,card%timeStep])
+        else
+            ierr = nf90_put_var(card%id, var%id, varValue)
+        end if
+        call NFWrap_HandleError(ierr)
+
+#if (defined DEBUG)
+        ierr = nf90_sync(card%id)
+        call NFWrap_HandleError(ierr)
+#endif
+
+        call MsgManager_DeleteSpeaker
+    
+    end subroutine NFWrap_Output1DFloatVar
+
+    subroutine NFWrap_Output1DDoubleVar(card, varName, varValue)
+        type(FileCard), intent(inout), target :: card
+        character(*), intent(in) :: varName
+        real(8), intent(in) :: varValue(:)
+
+        integer dimSize(1), ierr
+        type(Variable), pointer :: var
+
+        call MsgManager_RecordSpeaker("NFWrap_Output1DVar")
+
+        dimSize = shape(varValue)
+
+        call card%getVar(varName, var)
+
+        if (dimSize(1) /= var%dimSize(1)) then
+            call MsgManager_Speak(Error, &
+                "Output variable """//trim(varName)// &
+                """: Dimension not match! ("//trim(int2str(dimSize(1)))// &
+                " /= "//trim(int2str(var%dimSize(1)))//")")
+            call RunManager_EndRun
+        end if
+
+        if (var%timeVariant) then
+            ierr = nf90_put_var(card%id, var%id, varValue, [1,card%timeStep])
+        else
+            ierr = nf90_put_var(card%id, var%id, varValue)
+        end if
+        call NFWrap_HandleError(ierr)
+
+#if (defined DEBUG)
+        ierr = nf90_sync(card%id)
+        call NFWrap_HandleError(ierr)
+#endif
+
+        call MsgManager_DeleteSpeaker
+    
+    end subroutine NFWrap_Output1DDoubleVar
+    
     subroutine NFWrap_Output2DIntVar(card, varName, varValue)
         type(FileCard), intent(inout), target :: card
         character(*), intent(in) :: varName
@@ -725,6 +710,37 @@ contains
     
     end subroutine NFWrap_Output2DDoubleVar
 
+    subroutine NFWrap_Input1DVar(card, varName, varValue, timeStep)
+        type(FileCard), intent(in), target :: card
+        character(*), intent(in) :: varName
+        real(8), intent(out) :: varValue(:)
+        integer, intent(in), optional :: timeStep
+
+        integer dimSize(1), ierr
+        type(Variable), pointer :: var
+
+        call MsgManager_RecordSpeaker("NFWrap_Input1DVar")
+
+        dimSize = shape(varValue)
+
+        call card%getVar(varName, var)
+
+        if (dimSize(1) /= var%dimSize(1)) then
+            call MsgManager_Speak(Error, &
+                "Output variable """//trim(varName)//""": Dimension not match!")
+            call RunManager_EndRun
+        end if
+
+        if (var%timeVariant .and. present(timeStep)) then
+            ierr = nf90_get_var(card%id, var%id, varValue, [1,timeStep], [dimSize(1),1])
+        else
+            ierr = nf90_get_var(card%id, var%id, varValue)
+        end if
+
+        call MsgManager_DeleteSpeaker
+
+    end subroutine NFWrap_Input1DVar
+
     subroutine NFWrap_Input2DVar(card, varName, varValue, timeStep)
         type(FileCard), intent(in), target :: card
         character(*), intent(in) :: varName
@@ -755,16 +771,26 @@ contains
         call MsgManager_DeleteSpeaker
    
     end subroutine NFWrap_Input2DVar
-    
-    subroutine NFWrap_Close(card)
-        type(FileCard), intent(in) :: card
 
-        integer ierr
+    ! ************************************************************************ !
+    !                           Utilities                                      !
+    ! ************************************************************************ !
 
-        ierr = nf90_close(card%id)
+    subroutine NFWrap_HandleError(ierr)
+        integer, intent(in) :: ierr
 
-    end subroutine NFWrap_Close
-    
+        if (ierr /= nf90_noerr) then
+            call MsgManager_Speak(Error, &
+                "NetCDF error """//trim(nf90_strerror(ierr))//""".")
+            stop
+        end if
+
+    end subroutine NFWrap_HandleError
+
+    ! ************************************************************************ !
+    !                     Type-bounded procedures                              !
+    ! ************************************************************************ !
+
     subroutine FileCard_addDim(card, name, size)
         class(FileCard), intent(inout) :: card
         character(*), intent(in) :: name

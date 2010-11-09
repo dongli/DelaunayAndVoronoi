@@ -75,7 +75,7 @@ contains
         do i = 1, numSample
             SMPPtr1%lon = lon(i)
             SMPPtr1%lat = lat(i)
-            call CartesianTransform(SMPPtr1%lon, SMPPtr1%lat, &
+            call CartesianTransformOnUnitSphere(SMPPtr1%lon, SMPPtr1%lat, &
                 SMPPtr1%x, SMPPtr1%y, SMPPtr1%z)
             SMPPtr1 => SMPPtr1%next
         end do
