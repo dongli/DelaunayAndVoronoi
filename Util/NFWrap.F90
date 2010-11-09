@@ -55,6 +55,11 @@ module NFWrap
         module procedure NFWrap_Output2DDoubleVar
     end interface NFWrap_Output2DVar
 
+    interface NFWrap_Input1DVar
+        module procedure NFWrap_Input1DFloatVar
+        module procedure NFWrap_Input1DDoubleVar
+    end interface NFWrap_Input1DVar
+
 contains
 
     ! ************************************************************************ !
@@ -710,7 +715,38 @@ contains
     
     end subroutine NFWrap_Output2DDoubleVar
 
-    subroutine NFWrap_Input1DVar(card, varName, varValue, timeStep)
+    subroutine NFWrap_Input1DFloatVar(card, varName, varValue, timeStep)
+        type(FileCard), intent(in), target :: card
+        character(*), intent(in) :: varName
+        real(4), intent(out) :: varValue(:)
+        integer, intent(in), optional :: timeStep
+
+        integer dimSize(1), ierr
+        type(Variable), pointer :: var
+
+        call MsgManager_RecordSpeaker("NFWrap_Input1DVar")
+
+        dimSize = shape(varValue)
+
+        call card%getVar(varName, var)
+
+        if (dimSize(1) /= var%dimSize(1)) then
+            call MsgManager_Speak(Error, &
+                "Output variable """//trim(varName)//""": Dimension not match!")
+            call RunManager_EndRun
+        end if
+
+        if (var%timeVariant .and. present(timeStep)) then
+            ierr = nf90_get_var(card%id, var%id, varValue, [1,timeStep], [dimSize(1),1])
+        else
+            ierr = nf90_get_var(card%id, var%id, varValue)
+        end if
+
+        call MsgManager_DeleteSpeaker
+
+    end subroutine NFWrap_Input1DFloatVar
+
+    subroutine NFWrap_Input1DDoubleVar(card, varName, varValue, timeStep)
         type(FileCard), intent(in), target :: card
         character(*), intent(in) :: varName
         real(8), intent(out) :: varValue(:)
@@ -739,7 +775,7 @@ contains
 
         call MsgManager_DeleteSpeaker
 
-    end subroutine NFWrap_Input1DVar
+    end subroutine NFWrap_Input1DDoubleVar
 
     subroutine NFWrap_Input2DVar(card, varName, varValue, timeStep)
         type(FileCard), intent(in), target :: card

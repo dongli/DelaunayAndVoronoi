@@ -5,9 +5,9 @@ ROOT_DIR = $(dir $(shell pwd))
 VPATH = ${ROOT_DIR}/Util:${ROOT_DIR}/Core
 
 # fortran compiler options
-FC = ifort
+FC = gfortran
 ifeq ($(FC), ifort)
-FFLAGS = -fp-model precise -fp-speculation=safe 
+FFLAGS = -fp-model precise -fp-speculation=safe
 DEBUG_FLAGS = -O0 -g -DDEBUG -check bounds -traceback
 OPTIONS += -DFC_IFORT
 endif
@@ -21,6 +21,8 @@ endif
 NETCDF_ROOT = $(strip $(subst /bin/ncdump, , $(shell which ncdump)))
 NETCDF_INC = -I${NETCDF_ROOT}/include
 NETCDF_LIB = -L${NETCDF_ROOT}/lib -lnetcdf -lcurl
+
+LIBRARY = ${NETCDF_INC} ${NETCDF_LIB}
 
 # the rule for building dependencies (refer to "implicit rule")
 %.o: %.F90
@@ -38,9 +40,7 @@ ${TARGET}: %: $(addsuffix .F90, %) ${OBJECT}
              echo "   ${OPTIONS}"; \
          fi
 	@${FC} -o $@ $(addsuffix .F90, $@) \
-         ${OBJECT} ${OPTIONS} \
-         ${NETCDF_INC} ${NETCDF_LIB} \
-         ${LIBRARY} \
+         ${OBJECT} ${OPTIONS} ${LIBRARY} \
          ${DEBUG_FLAGS} ${FFLAGS} && \
          echo " ---> $@ is created"
 	@echo ${seperator}

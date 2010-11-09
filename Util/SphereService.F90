@@ -6,24 +6,24 @@ module SphereService
 
     implicit none
 
-    real(8), parameter :: Equator = 0.0d0
-    real(8), parameter :: PI    = 4.0d0*atan(1.0d0)
-    real(8), parameter :: PI2   = 2.0d0*PI
-    real(8), parameter :: PI05  = 0.5d0*PI
-    real(8), parameter :: PI025 = 0.25d0*PI
-    real(8), parameter :: PI15  = 1.5d0*PI
-    real(8), parameter :: Re    = 6371.229d3
-    real(8), parameter :: Re2   = Re**2.0d0
-    real(8), parameter :: Rad2Deg = 180.0d0/PI
+    real(RealKind), parameter :: Zero  = 0.0
+    real(RealKind), parameter :: PI    = 4.0*atan(1.0)
+    real(RealKind), parameter :: PI2   = 2.0*PI
+    real(RealKind), parameter :: PI05  = 0.5*PI
+    real(RealKind), parameter :: PI025 = 0.25*PI
+    real(RealKind), parameter :: PI15  = 1.5*PI
+    real(RealKind), parameter :: Re    = 6371.229
+    real(RealKind), parameter :: Re2   = Re**2.0
+    real(RealKind), parameter :: Rad2Deg = 180.0/PI
 
 contains
 
     subroutine RotationTransform(lonP, latP, lonO, latO, lonR, latR)
-        real(8), intent(in) :: lonP, latP ! rotated pole coordinate
-        real(8), intent(in) :: lonO, latO ! original coordinate
-        real(8), intent(out), optional :: lonR, latR ! rotated coordinate
+        real(RealKind), intent(in) :: lonP, latP ! rotated pole coordinate
+        real(RealKind), intent(in) :: lonO, latO ! original coordinate
+        real(RealKind), intent(out), optional :: lonR, latR ! rotated coordinate
 
-        real(8) temp1, temp2, temp3, dlon
+        real(RealKind) temp1, temp2, temp3, dlon
 
         call MsgManager_RecordSpeaker("RotationTransform")
 
@@ -47,11 +47,11 @@ contains
     end subroutine RotationTransform
 
     subroutine InverseRotationTransform(lonP, latP, lonO, latO, lonR, latR)
-        real(8), intent(in) :: lonP, latP  ! rotated pole coordinate
-        real(8), intent(out) :: lonO, latO ! original coordinate
-        real(8), intent(in) :: lonR, latR  ! rotated coordinate
+        real(RealKind), intent(in) :: lonP, latP  ! rotated pole coordinate
+        real(RealKind), intent(out) :: lonO, latO ! original coordinate
+        real(RealKind), intent(in) :: lonR, latR  ! rotated coordinate
 
-        real(8) temp1, temp2, temp3
+        real(RealKind) temp1, temp2, temp3
 
         call MsgManager_RecordSpeaker("InverseRotationTransform")
 
@@ -82,10 +82,10 @@ contains
     end subroutine InverseRotationTransform
 
     subroutine CartesianTransform(lon, lat, x, y, z)
-        real(8), intent(in) :: lon, lat
-        real(8), intent(out) :: x, y, z
+        real(RealKind), intent(in) :: lon, lat
+        real(RealKind), intent(out) :: x, y, z
 
-        real(8) ReCosLat
+        real(RealKind) ReCosLat
 
         ReCosLat = Re*cos(lat)
         x = ReCosLat*cos(lon)
@@ -95,8 +95,8 @@ contains
     end subroutine CartesianTransform
 
     subroutine InverseCartesianTransform(lon, lat, x, y, z)
-        real(8), intent(out) :: lon, lat
-        real(8), intent(in) :: x, y, z
+        real(RealKind), intent(out) :: lon, lat
+        real(RealKind), intent(in) :: x, y, z
 
         lon = atan2(y, x)
         lat = asin(z/Re)
@@ -104,10 +104,10 @@ contains
     end subroutine InverseCartesianTransform
 
     subroutine CartesianTransformOnUnitSphere(lon, lat, x, y, z)
-        real(8), intent(in) :: lon, lat
-        real(8), intent(out) :: x, y, z
+        real(RealKind), intent(in) :: lon, lat
+        real(RealKind), intent(out) :: x, y, z
 
-        real(8) CosLat
+        real(RealKind) CosLat
 
         CosLat = cos(lat)
         x = CosLat*cos(lon)
@@ -117,8 +117,8 @@ contains
     end subroutine CartesianTransformOnUnitSphere
 
     subroutine InverseCartesianTransformOnUnitSphere(lon, lat, x, y, z)
-        real(8), intent(out) :: lon, lat
-        real(8), intent(in) :: x, y, z
+        real(RealKind), intent(out) :: lon, lat
+        real(RealKind), intent(in) :: x, y, z
 
         lon = atan2(y, x)
         lat = asin(z)

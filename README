@@ -1,6 +1,7 @@
 ********************************************************************************
 ***************************** DelaunayAndVoronoi *******************************
 ********************************************************************************
+________________________________________________________________________________
 Description:
 
   This is an implementation of Delaunay triangulation and Voronoi diagram on the
@@ -8,14 +9,48 @@ Description:
   update when all the data points can move without construct  from  the scratch.
   It originates from the need of space tessellation in my numerical scheme (TTS)
   for solving linear advection problem.
-
-Current Development:
-
-  - Only sphere manifold is considered (for atmospheric modelling).
-  - Delaunay triangulation and its dual Voronoi diagram are finished.
-
+________________________________________________________________________________
 Directory structure:
 
   The program is made up by several modules in "Core" and "Util". In "UnitTest",
   there are some tests can be run. A script in "NCLScripts" can be used to show
   the output graphically.
+________________________________________________________________________________
+Dependencies:
+
+  The NetCDF library is needed for outputing results, and NCL is incorporated in
+  visualization.
+________________________________________________________________________________
+Usage:
+
+  DelaunayAndVoronoi is highly modularized. The use of it is very easy.
+  In some Fortran program:
+
+      ...
+      use SampleManager
+      use DelaunayAndVoronoi
+      ...
+      call SampleManager_Init(<number of samples>)
+      call SampleManager_Set(<sample lon>, <sample lat>)
+      call DelaunayAndVoronoi_LinkSample
+      call ConstructDelaunayTriangulation
+      call ExtractVoronoiDiagram
+      call DelaunayAndVoronoi_Output(<file name>)
+
+  The program has been compiled using "ifort" and "gfortran", you can change
+  the compiler in "Makefile.basic" for FC macro.
+
+  To visualize the results, use the scripts in "NCLScripts":
+
+      cd <directory where results are>
+      <relative path to "NCLScripts">/plot.sh
+
+  It will plot all the NetCDF files in that directory, and generate a series of
+  PDF files with the same name of those files. You can change "plot.sh" for your
+  purpose.
+________________________________________________________________________________
+Current Development:
+
+  - Only sphere manifold is considered (for atmospheric modelling).
+  - Delaunay triangulation and its dual Voronoi diagram are finished.
+________________________________________________________________________________

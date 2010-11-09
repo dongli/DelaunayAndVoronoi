@@ -10,7 +10,7 @@ program TestRealData
     type(FileCard) fcard
 
     integer numPoint, numTimeStep
-    real(8), allocatable :: lon(:), lat(:)
+    real(RealKind), allocatable :: lon(:), lat(:)
 
     call get_command_argument(1, filePath)
 

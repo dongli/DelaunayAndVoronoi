@@ -23,7 +23,7 @@ module CommonTypes
     ! ======================================================================== !
     !                                     2
     type RealPtr
-        real(8), pointer :: ptr
+        real(RealKind), pointer :: ptr
     end type RealPtr
 
     type TwoTimeLevel
@@ -84,7 +84,7 @@ contains
 
     end subroutine OperationList_dump
     
-    real(8) function TwoTimeLevel_getNew(a) result(res)
+    real(RealKind) function TwoTimeLevel_getNew(a) result(res)
         class(TwoTimeLevel), intent(in) :: a
 
         res = a%value(1)%ptr
@@ -93,13 +93,13 @@ contains
 
     subroutine TwoTimeLevel_setNew(a, value)
         class(TwoTimeLevel), intent(out) :: a
-        real(8), intent(in) :: value
+        real(RealKind), intent(in) :: value
     
         a%value(1)%ptr = value
 
     end subroutine TwoTimeLevel_setNew
     
-    real(8) function TwoTimeLevel_getOld(a) result(res)
+    real(RealKind) function TwoTimeLevel_getOld(a) result(res)
         class(TwoTimeLevel), intent(in) :: a
 
         res = a%value(2)%ptr
@@ -118,7 +118,7 @@ contains
 
     subroutine TwoTimeLevel_link(a, value)
         class(TwoTimeLevel), intent(out) :: a
-        real(8), intent(in), target :: value
+        real(RealKind), intent(in), target :: value
 
         integer i        
 

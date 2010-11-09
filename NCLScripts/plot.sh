@@ -26,9 +26,9 @@ do
         mapRes@mpGreatCircleLinesOn = True
         mapRes@mpGridAndLimbOn = True
         mapRes@mpGridLineColor = "Background"
-        ;mapRes@mpProjection = "Satellite"
-        mapRes@mpCenterLonF = 180.0
-        ;mapRes@mpCenterLatF = 45.0
+        mapRes@mpProjection = "Satellite"
+        mapRes@mpCenterLonF = 60.0
+        mapRes@mpCenterLatF = 45.0
         ;mapRes@mpProjection = "Stereographic"
         ;mapRes@gsnPolar = "SH"
         ;mapRes@mpLimitMode = "LatLon"

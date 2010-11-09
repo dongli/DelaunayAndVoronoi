@@ -4,12 +4,13 @@ module FloatingPoint
 
     implicit none
 
-    real(8), parameter :: eps = 1.0D-16
+    real(RealKind) test
+    real(RealKind), parameter :: eps = epsilon(test)
 
 contains
 
     logical function FloatingPoint_Check(number, name) result(res)
-        real(8), intent(in) :: number
+        real(RealKind), intent(in) :: number
         character(*), intent(in) :: name
 
 #if (defined FC_IFORT)

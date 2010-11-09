@@ -16,11 +16,21 @@ module SampleManager
 
     implicit none
 
+    private
+
+    public SampleManager_Init
+    public SampleManager_Set
+
+    public Sample
+
+    public numSample
+    public SMPHead
+
     integer :: numSample = 0
 
     type Sample
-        real(8) lon, lat
-        real(8) x, y, z ! transformed Cartesian coordinates
+        real(RealKind) lon, lat
+        real(RealKind) x, y, z ! transformed Cartesian coordinates
         type(Sample), pointer :: prev => null()
         type(Sample), pointer :: next => null()
     end type
@@ -39,28 +49,28 @@ contains
         integer, intent(in) :: n
     
         integer i
-        type(Sample), pointer :: SMPPtr1, SMPPtr2
+        type(Sample), pointer :: SMP1, SMP2
 
         numSample = n
 
         allocate(SMPHead)
-        SMPPtr1 => SMPHead
-        SMPPtr2 => SMPHead
+        SMP1 => SMPHead
+        SMP2 => SMPHead
         do i = 2, numSample
-            allocate(SMPPtr1%next)
-            SMPPtr1 => SMPPtr1%next
-            SMPPtr1%prev => SMPPtr2
-            SMPPtr2%next => SMPPtr1
-            SMPPtr2 => SMPPtr1
+            allocate(SMP1%next)
+            SMP1 => SMP1%next
+            SMP1%prev => SMP2
+            SMP2%next => SMP1
+            SMP2 => SMP1
         end do
 
     end subroutine SampleManager_Init
 
     subroutine SampleManager_Set(lon, lat)
-        real(8), intent(in) :: lon(:), lat(:)
+        real(RealKind), intent(in) :: lon(:), lat(:)
 
         integer i, dimSize(1)
-        type(Sample), pointer :: SMPPtr1
+        type(Sample), pointer :: SMP1
 
         dimSize = shape(lon)
         if (dimSize(1) /= numSample) then
@@ -71,18 +81,16 @@ contains
             ! Complain
         end if
 
-        SMPPtr1 => SMPHead
+        SMP1 => SMPHead
         do i = 1, numSample
-            SMPPtr1%lon = lon(i)
-            SMPPtr1%lat = lat(i)
-            call CartesianTransformOnUnitSphere(SMPPtr1%lon, SMPPtr1%lat, &
-                SMPPtr1%x, SMPPtr1%y, SMPPtr1%z)
-            SMPPtr1 => SMPPtr1%next
+            SMP1%lon = lon(i)
+            SMP1%lat = lat(i)
+            call CartesianTransformOnUnitSphere(SMP1%lon, SMP1%lat, &
+                SMP1%x, SMP1%y, SMP1%z)
+            SMP1 => SMP1%next
         end do
-   
 
     end subroutine SampleManager_Set
-    
 
 end module SampleManager
 

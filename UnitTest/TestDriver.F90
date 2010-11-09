@@ -7,8 +7,8 @@ program TestDriver
     implicit none
 
     integer n
-    real(8), allocatable :: lon(:), lat(:)
-    real(8) dlon, dlat, dlon05, dlat05
+    real(RealKind), allocatable :: lon(:), lat(:)
+    real(RealKind) dlon, dlat, dlon05, dlat05
     integer i, j, k
 
     if (.false.) then
@@ -36,8 +36,8 @@ program TestDriver
         allocate(lat(n))
         dlon = PI2/10
         dlat = PI/10
-        dlon05 = dlon*0.5d0
-        dlat05 = dlat*0.5d0
+        dlon05 = dlon*0.5
+        dlat05 = dlat*0.5
         k = 1
         do j = 1, 10
             do i = 1, 10
