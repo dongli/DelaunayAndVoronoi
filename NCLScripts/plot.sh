@@ -1,6 +1,32 @@
 #!/bin/bash
 
-for file in $(ls *.nc)
+fileWildCard=$1
+
+echo "Plot Delaunay triangulation? (y/n)"
+read -p "> " ans
+if [ $ans == "y" ]; then
+    DT=True
+else
+    DT=False
+fi
+
+echo "Plot Voronoi diagram? (y/n)"
+read -p "> " ans
+if [ $ans == "y" ]; then
+    VD=True
+else
+    VD=False
+fi
+
+echo "Plot vertices? (y/n)"
+read -p "> " ans
+if [ $ans == "y" ]; then
+    DVT=True
+else
+    DVT=False
+fi
+
+for file in $(ls ${fileWildCard})
 do
     figure=$(basename ${file} .nc)
     echo "Plotting ${file} ... "
@@ -27,12 +53,17 @@ do
         mapRes@mpGridAndLimbOn = True
         mapRes@mpGridLineColor = "Background"
         mapRes@mpProjection = "Satellite"
-        mapRes@mpCenterLonF = 60.0
-        mapRes@mpCenterLatF = 45.0
+        mapRes@mpCenterLonF = 90
+        mapRes@mpCenterLatF = 45
+        ;mapRes@mpLimitMode = "Angles"
+        ;mapRes@mpLeftAngleF = 2
+        ;mapRes@mpRightAngleF = 2
+        ;mapRes@mpTopAngleF = 2
+        ;mapRes@mpBottomAngleF = 2
         ;mapRes@mpProjection = "Stereographic"
-        ;mapRes@gsnPolar = "SH"
+        ;mapRes@gsnPolar = "NH"
         ;mapRes@mpLimitMode = "LatLon"
-        ;mapRes@mpMaxLatF = -70
+        ;mapRes@mpMinLatF = 10
 
         map = gsn_csm_map(wks, mapRes)
 
@@ -49,12 +80,12 @@ do
 
         draw(map)
 
-        if (True) then
+        if (${DT}) then
             ; Plot Delaunay triangle edges
             system("echo plotting triangle edges ...")
             
             edgeRes = True
-            edgeRes@gsLineThicknessF = 1.
+            edgeRes@gsLineThicknessF = 0.5
             edgeRes@gsLineColor = "blue"
 
             lon = new(4, "float")
@@ -74,7 +105,6 @@ do
                     lat(numVertex) = lat(0)
                     gsn_polyline(wks, map, lon(0:numVertex), lat(0:numVertex), edgeRes)
                 end if
-                system("echo triangle "+i+" done.")
             end do
 
             delete(lon)
@@ -83,8 +113,10 @@ do
 
         if (False) then
             ; Plot circumcirlces
+            system("echo plotting circumcirlces")
+
             circRes = True
-            circRes@gsLineThicknessF = 2.
+            circRes@gsLineThicknessF = 0.5
             circRes@gsLineColor = "green"
 
             arclon = new(50, float)
@@ -95,11 +127,13 @@ do
             end do
         end if
 
-        if (False) then
+        if (${VD}) then
             ; Plot Voronoi cell edges
+            system("echo plotting Voronoi cells")
+
             edgeRes = True
-            edgeRes@gsLineThicknessF = 2.
-            edgeRes@gsLineColor = "yellow"
+            edgeRes@gsLineThicknessF = 0.5
+            edgeRes@gsLineColor = "red"
 
             do i = 0, numPoint-1
                 lon = new(f->numVVT(i)+1, "float")
@@ -116,12 +150,13 @@ do
             end do
         end if
 
-        if (False) then
-            system("echo plotting vertices")
+        if (${DVT}) then
             ; Plot vertices
+            system("echo plotting vertices")
+
             vertexRes = True
             vertexRes@gsMarkerIndex = 1
-            vertexRes@gsMarkerSizeF = 0.02
+            vertexRes@gsMarkerSizeF = 0.005
             vertexRes@gsMarkerColor = "red"
 
             gsn_polymarker(wks, map, f->lonPoint, f->latPoint, vertexRes)

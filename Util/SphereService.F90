@@ -16,6 +16,10 @@ module SphereService
     real(RealKind), parameter :: Re2   = Re**2.0
     real(RealKind), parameter :: Rad2Deg = 180.0/PI
 
+    interface calcArea
+        module procedure calcArea1, calcArea2
+    end interface calcArea
+
 contains
 
     subroutine RotationTransform(lonP, latP, lonO, latO, lonR, latR)
@@ -124,5 +128,59 @@ contains
         lat = asin(z)
 
     end subroutine InverseCartesianTransformOnUnitSphere
+
+    ! ************************************************************************ !
+    ! Area                                                                     !
+    ! Purpose:                                                                 !
+    !   Calculate the area of a spherical polygon.                             !
+    ! ************************************************************************ !
+
+    subroutine calcArea1(n, x, y, z, area)
+        integer, intent(in) :: n
+        real(RealKind), intent(in) :: x(n), y(n), z(n)
+        real(RealKind), intent(out) :: area
+
+        real(RealKind) norm(3,n), len, dot, angle(n)
+        real(RealKind) excess ! The spherical excess
+
+        integer i, j
+
+        do i = 1, n
+            j = merge(i-1, n, i /= 1)
+            norm(1,i) = y(i)*z(j)-z(i)*y(j)
+            norm(2,i) = x(i)*z(j)-z(i)*x(j)
+            norm(3,i) = x(i)*y(j)-y(i)*x(j)
+            len = sqrt(norm(1,i)**2+norm(2,i)**2+norm(3,i)**2)
+            norm(:,i) = norm(:,i)/len
+        end do
+
+        do i = 1, n
+            j = merge(i+1, 1, i /= n)
+            dot = norm(1,i)*norm(1,j)+norm(2,i)*norm(2,j)+norm(3,i)*norm(3,j)
+            angle(i) = acos(-dot)
+        end do
+
+        excess = sum(angle)-(n-2)*PI
+
+        area = excess*Re2
+
+    end subroutine calcArea1
+
+    subroutine calcArea2(n, lon, lat, area)
+        integer, intent(in) :: n
+        real(RealKind), intent(in) :: lon(n), lat(n)
+        real(RealKind), intent(out) :: area
+
+        real(RealKind) x(n), y(n), z(n)
+
+        integer i
+
+        do i = 1, n
+            call CartesianTransformOnUnitSphere(lon(i), lat(i), &
+                x(i), y(i), z(i))
+        end do
+        call calcArea1(n, x, y, z, area)
+
+    end subroutine calcArea2
 
 end module SphereService
