@@ -55,6 +55,7 @@ module DelaunayAndVoronoi
     private
 
     public DelaunayAndVoronoi_LinkSample
+    public DelaunayAndVoronoi_CleanAll
     public ConstructDelaunayTriangulation
     public ExtractVoronoiDiagram
     public DelaunayAndVoronoi_Report
@@ -115,7 +116,7 @@ module DelaunayAndVoronoi
         ! For topology
         type(DelaunayVertexPointer) DVT(3)
         type(DelaunayTrianglePointer) adjDT(3) ! Three adjacent DTs
-        real(RealKind) lonCirc, latCirc ! Center of circumcircle
+        type(Point) cnt ! Center of circumcircle
         real(RealKind) radius ! Radius of circumcircle in radian
         ! For validation
         integer :: numSubDT = 0 ! the number of subdivided triangles
@@ -133,10 +134,7 @@ module DelaunayAndVoronoi
     ! Voronoi diagram data structure
     type VoronoiCell
         integer :: id = -1
-        ! For geometry
-        integer :: numVVT
-        real(RealKind), allocatable :: lonVVT(:), latVVT(:)
-        real(RealKind) area
+        type(Sample), pointer :: SMP => null()
         type(VoronoiCell), pointer :: prev => null()
         type(VoronoiCell), pointer :: next => null()
     end type VoronoiCell
@@ -154,12 +152,12 @@ module DelaunayAndVoronoi
     ! Purpose: 1) Record the obsolete DTs for deletion;
     !          2) For "locally" updating of point-in-triangle relation
     integer :: numObsDT = 0
-    type(DelaunayTrianglePointerList), pointer :: obsDTHead, obsDTCurr
+    type(DelaunayTrianglePointerList), pointer :: obsDTHead
     ! Temporal DT record list
     ! Purpose: 1) Record the temporal DTs for deletion;
     !          2) For updating point-in-triangle relation
     integer :: numTmpDT = 0 ! Record list of temporal DT
-    type(DelaunayTrianglePointerList), pointer :: tmpDTHead, tmpDTCurr
+    type(DelaunayTrianglePointerList), pointer :: tmpDTHead
     ! Voronoi cell
     integer :: numVC = 0
     type(VoronoiCell), pointer :: VCHead
@@ -186,11 +184,13 @@ module DelaunayAndVoronoi
     end interface InCircle
 
 #if (defined DelaunayAndVoronoi_Debug)
+    public debug, doRandom, idx1, idx2, idx3
+    logical :: debug
     logical :: printDet = .false. ! Switch on/off debug print of determinant.
     logical :: doRandom = .true.  ! Switch on/off randomized indices
-    integer :: idx1 = 4754        ! Fix the first inserted DVTs for debugging.
-    integer :: idx2 = 6867
-    integer :: idx3 = 6897
+    integer :: idx1 = 833         ! Fix the first inserted DVTs for debugging.
+    integer :: idx2 = 1204
+    integer :: idx3 = 1784
 #endif
 
 contains
@@ -241,22 +241,24 @@ contains
 
         ! Initialize the Voronoi cells .................................. STEP 2
         numVC = numSample
+        SMP => SMPHead
         do i = 1, numVC
             if (i == 1) then
                 allocate(VCHead)
                 VC1 => VCHead
             else
-                allocate(VC1%next)
                 VC2 => VC1
+                allocate(VC1%next)
                 VC1 => VC1%next
                 VC1%prev => VC2
                 VC2%next => VC1
             end if
             VC1%id = i
-            VC1%numVVT = 1
-            allocate(VC1%lonVVT(1))
-            allocate(VC1%latVVT(1))
+            VC1%SMP => SMP
+            SMP => SMP%next
         end do
+
+        call RandomNumber_Start
 
 #if (!defined DelaunayAndVoronoi_FullSpeed)
         call MsgManager_Speak(Notice, "Finished.")
@@ -281,30 +283,14 @@ contains
         logical :: found, inserted(numDVT)
         integer i, j, k, l, ret, idx(3)
 
-#if (!defined DelaunayAndVoronoi_FullSpeed)
+#if (!defined DelaunayAndVoronoi_FullSpeed || defined DelaunayAndVoronoi_Debug)
         call MsgManager_RecordSpeaker("ConstructDelaunayTriangulation")
 #endif
 
         inserted = .false.
 
         ! Randomly choose the first three vertices to insert ............ STEP 0
-        call RandomNumber_Start
-        call RandomNumber_Get(1, numDVT, idx)
-        call CommonUtils_Sort(idx)
-#if (defined DelaunayAndVoronoi_Debug)
-        if (.not. doRandom) then
-            idx = [idx1,idx2,idx3] ! Fix the indices of the first inserted vertices
-            print *, "The first vertices are fixed to "//trim(int2str(idx1))// &
-                ", "//trim(int2str(idx2))//", "//trim(int2str(idx3))//" for debug!"
-        end if
-#endif
-#if (!defined DelaunayAndVoronoi_FullSpeed)
-        call MsgManager_Speak(Notice, &
-            "The randomly chosen vertices are: "// &
-            trim(int2str(idx(1)))//", "//&
-            trim(int2str(idx(2)))//", "//&
-            trim(int2str(idx(3)))//".")
-#endif
+        call GetTheFirstThreeDVTIndex(idx)
         DVT1 => DVTHead
         do i = 1, idx(1)-1
             DVT1 => DVT1%next
@@ -362,7 +348,7 @@ contains
                     DVT2 => DT1%DVT(-ret)%ptr
                     if (DVT2%id < 0) then
                         ! The vertex is virtual ....................... CASE 3-1
-#if (!defined DelaunayAndVoronoi_FullSpeed)
+#if (!defined DelaunayAndVoronoi_FullSpeed || defined DelaunayAndVoronoi_Debug)
                         call MsgManager_Speak(Notice, "Virtual DVT "// &
                             trim(int2str(DVT2%id))//" coincides with DVT "// &
                             trim(int2str(DVT1%id))//", so make replacement.")
@@ -412,7 +398,7 @@ contains
             DVT1 => DVT1%next
         end do
 
-#if (!defined DelaunayAndVoronoi_FullSpeed)
+#if (!defined DelaunayAndVoronoi_FullSpeed || defined DelaunayAndVoronoi_Debug)
         call MsgManager_Speak(Notice, "Initial point-in-triangle relation is updated.")
 #endif
 
@@ -437,6 +423,17 @@ contains
             do j = 1, numObsDT
                 do while (associated(obsDT%ptr%incDVTHead))
                     call UpdatePointInTriangle(obsDT%ptr%incDVTHead%ptr, obsDT%ptr, found)
+#if (defined DelaunayAndVoronoi_Debug)
+                    if (.not. found) then
+                        print *, "Point", obsDT%ptr%incDVTHead%ptr%id, "does not found its new DT."
+                        call PrintTriangleTopology(obsDT%ptr)
+                        do k = 1, 3
+                            call obsDT%ptr%DVT(k)%ptr%SMP%dump
+                        end do
+                        call obsDT%ptr%incDVTHead%ptr%SMP%dump
+                        stop
+                    end if
+#endif
                 end do
                 obsDT => obsDT%next
             end do
@@ -473,7 +470,7 @@ contains
             DVT1 => DVT1%next
             deallocate(DVT2)
         end do
-#if (!defined DelaunayAndVoronoi_FullSpeed)
+#if (!defined DelaunayAndVoronoi_FullSpeed || defined DelaunayAndVoronoi_Debug)
         if (numVirtualDVT /= 0) then
             call MsgManager_Speak(Notice, trim(int2str(numVirtualDVT))// &
                 " virtual DVTs are deleted.")
@@ -484,7 +481,7 @@ contains
         ! Calculate the circumcenter and circumradius
         call CalcCircumcircle
 
-#if (!defined DelaunayAndVoronoi_FullSpeed)
+#if (!defined DelaunayAndVoronoi_FullSpeed || defined DelaunayAndVoronoi_Debug)
         call MsgManager_Speak(Notice, "Finished.")
         call MsgManager_DeleteSpeaker
 #endif
@@ -502,40 +499,49 @@ contains
         type(VoronoiCell), pointer :: VC
         type(DelaunayTrianglePointerList), pointer :: icdDT
         integer i, j
+#if (defined DelaunayAndVoronoi_Debug)
+        real(RealKind) :: totalArea = 0.0e0
+#endif
 
 #if (!defined DelaunayAndVoronoi_FullSpeed)
         call MsgManager_RecordSpeaker("ExtractVoronoiDiagram")
 #endif
 
         maxNumVVT = 0
+#if (defined DelaunayAndVoronoi_Debug)
+        totalArea = 0.0
+#endif
         DVT => DVTHead
         VC => VCHead
         do i = 1, numDVT ! = numVC
             if (DVT%numIcdDT > maxNumVVT) maxNumVVT = DVT%numIcdDT
-            if (VC%numVVT /= DVT%numIcdDT) then
-                deallocate(VC%lonVVT)
-                deallocate(VC%latVVT)
-                VC%numVVT = DVT%numIcdDT
-                allocate(VC%lonVVT(VC%numVVT))
-                allocate(VC%latVVT(VC%numVVT))
+            if (VC%SMP%bnd%numVtx /= DVT%numIcdDT) then
+                deallocate(VC%SMP%bnd%vtx)
+                VC%SMP%bnd%numVtx = DVT%numIcdDT
+                allocate(VC%SMP%bnd%vtx(VC%SMP%bnd%numVtx))
             end if
             icdDT => DVT%icdDTHead
             do j = 1, DVT%numIcdDT
-                VC%lonVVT(j) = icdDT%ptr%lonCirc
-                VC%latVVT(j) = icdDT%ptr%latCirc
+                VC%SMP%bnd%vtx(j)%lon = icdDT%ptr%cnt%lon
+                VC%SMP%bnd%vtx(j)%lat = icdDT%ptr%cnt%lat
                 icdDT => icdDT%next
             end do
-            call calcArea(VC%numVVT, VC%lonVVT, VC%latVVT, VC%area)
-            if (VC%area < 0) then
-                write(*, "('DVT', I5, ' has negative area', F15.3, '!')") DVT%id, VC%area
-                write(*, "('Its Voronoi cell vertices are:')")
-                do j = 1, VC%numVVT
-                    write(*, "(2F10.5)") VC%lonVVT(j)*Rad2Deg, VC%latVVT(j)*Rad2Deg
-                end do
+            call calcArea(VC%SMP%bnd%numVtx, &
+                VC%SMP%bnd%vtx(:)%lon, VC%SMP%bnd%vtx(:)%lat, VC%SMP%bnd%area)
+            if (VC%SMP%bnd%area < 0) then
+                write(*, "('DVT', I5, ' has negative area!')") DVT%id
+                call VC%SMP%bnd%dump
             end if
+#if (defined DelaunayAndVoronoi_Debug)
+            totalArea = totalArea+VC%SMP%bnd%area
+#endif
             DVT => DVT%next
             VC => VC%next
         end do
+
+#if (defined DelaunayAndVoronoi_Debug)
+        print *, "PI is", totalArea/Re2/4.0, ", is that almostly right?"
+#endif
 
 #if (!defined DelaunayAndVoronoi_FullSpeed)
         call MsgManager_Speak(Notice, "Finished.")
@@ -543,6 +549,64 @@ contains
 #endif
 
     end subroutine ExtractVoronoiDiagram
+
+    ! ************************************************************************ !
+    ! DelaunayAndVoronoi_CleanAll                                              !
+    ! Purpose:                                                                 !
+    !   Clean all the Delaunay triangles and reset the values for a new start. !
+    ! ************************************************************************ !
+
+    subroutine DelaunayAndVoronoi_CleanAll
+        type(DelaunayTriangle), pointer :: DT
+        type(DelaunayVertex), pointer :: DVT
+        type(DelaunayTrianglePointerList), pointer :: icdDT1, icdDT2
+        type(DelaunayVertexPointerList), pointer :: linkDVT
+        integer i, j
+
+        ! Delete triangles
+        do while (associated(DTHead))
+            DT => DTHead%next
+            deallocate(DTHead)
+            numDT = numDT-1
+            DTHead => DT
+        end do
+        numTotalDT = 0
+
+        ! Delete virtual vertices
+        do while (associated(VirtualDVTHead))
+            DVT => VirtualDVTHead%next
+            deallocate(VirtualDVTHead)
+            numVirtualDVT = numVirtualDVT-1
+            VirtualDVTHead => DVT
+        end do
+
+        ! Delete incident triangle and link vertex lists
+        DVT => DVTHead
+        do i = 1, numDVT
+            icdDT1 => DVT%icdDTHead%next
+            do while (DVT%numIcdDT /= 1)
+                icdDT2 => icdDT1%next
+                deallocate(icdDT1)
+                DVT%numIcdDT = DVT%numIcdDT-1
+                icdDT1 => icdDT2
+            end do
+            nullify(DVT%icdDTHead%prev)
+            do j = 1, DVT%numLinkDVT
+                linkDVT => DVT%linkDVTHead%next
+                deallocate(DVT%linkDVTHead)
+                DVT%numLinkDVT = DVT%numLinkDVT-1
+                DVT%linkDVTHead => linkDVT
+            end do
+            nullify(DVT%linkDVTHead)
+            nullify(DVT%cntDT1)
+            nullify(DVT%cntDT2)
+            nullify(DVT%stub1)
+            nullify(DVT%stub2)
+            DVT%edgeIdx = -1
+            DVT => DVT%next
+        end do
+
+    end subroutine DelaunayAndVoronoi_CleanAll
     
     ! ************************************************************************ !
     ! Output subroutines                                                       !
@@ -552,7 +616,6 @@ contains
         character(*), intent(in) :: filePath
 
         real(4), allocatable :: lon(:), lat(:)
-        real(4), allocatable :: lonCirc(:), latCirc(:), radius(:)
         integer, allocatable :: triangle(:,:)
         type(DelaunayVertex), pointer :: DVT
         type(DelaunayTriangle), pointer :: DT
@@ -573,20 +636,16 @@ contains
 
         DVT => DVTHead
         do i = 1, numDVT
-            lon(i) = real(DVT%SMP%lon*Rad2Deg)
-            lat(i) = real(DVT%SMP%lat*Rad2Deg)
+            lon(i) = real(DVT%SMP%lon)
+            lat(i) = real(DVT%SMP%lat)
             DVT => DVT%next
         end do
         DVT => VirtualDVTHead
         do i = 1, numVirtualDVT
-            lon(numDVT+i) = real(DVT%SMP%lon*Rad2Deg)
-            lat(numDVT+i) = real(DVT%SMP%lat*Rad2Deg)
+            lon(numDVT+i) = real(DVT%SMP%lon)
+            lat(numDVT+i) = real(DVT%SMP%lat)
             DVT => DVT%next
         end do
-
-        allocate(lonCirc(numDT))
-        allocate(latCirc(numDT))
-        allocate(radius(numDT))
 
         allocate(triangle(3,numDT))
 
@@ -595,9 +654,6 @@ contains
             do j = 1, 3
                 triangle(j,i) = DT%DVT(j)%ptr%id
             end do
-            lonCirc(i) = real(DT%lonCirc*Rad2Deg)
-            latCirc(i) = real(DT%latCirc*Rad2Deg)
-            radius(i) = real(DT%radius*Rad2Deg)
             DT => DT%next
         end do
 
@@ -608,12 +664,12 @@ contains
 
         VC => VCHead
         do j = 1, numVC
-            do i = 1, VC%numVVT
-                lonVVT(i,j) = real(VC%lonVVT(i)*Rad2Deg)
-                latVVT(i,j) = real(VC%latVVT(i)*Rad2Deg)
+            do i = 1, VC%SMP%bnd%numVtx
+                lonVVT(i,j) = real(VC%SMP%bnd%vtx(i)%lon)
+                latVVT(i,j) = real(VC%SMP%bnd%vtx(i)%lat)
             end do
-            areaVC(j) = VC%area
-            numVVT(j) = VC%numVVT
+            areaVC(j) = VC%SMP%bnd%area
+            numVVT(j) = VC%SMP%bnd%numVtx
             VC => VC%next
         end do
 
@@ -622,61 +678,25 @@ contains
         call NFWrap_NewDim(fcard, "numTriangle", numDT)
         call NFWrap_NewDim(fcard, "numTriangleVertex", 3)
         call NFWrap_NewDim(fcard, "maxNumVoronoiCellVertex", maxNumVVT)
-        call NFWrap_New1DVar(fcard, &
-            varName="lonPoint", dataType="float", &
-            dimName="numPoint", &
-            longName="Point longitude", &
-            unitName="degree_east", timeVariant=.false.)
-        call NFWrap_New1DVar(fcard, &
-            varName="latPoint", dataType="float", &
-            dimName="numPoint", &
-            longName="Point latitude", &
-            unitName="degree_north", timeVariant=.false.)
-        call NFWrap_New1DVar(fcard, &
-            varName="lonCirc", dataType="float", &
-            dimName="numTriangle", &
-            longName="Circumcenter longitude", &
-            unitName="degree_east", timeVariant=.false.)
-        call NFWrap_New1DVar(fcard, &
-            varName="latCirc", dataType="float", &
-            dimName="numTriangle", &
-            longName="Circumcenter latitude", &
-            unitName="degree_north", timeVariant=.false.)
-        call NFWrap_New1DVar(fcard, &
-            varName="radius", dataType="float", &
-            dimName="numTriangle", &
-            longName="Circumradius", &
-            unitName="degree", timeVariant=.false.)
-        call NFWrap_New2DVar(fcard, &
-            varName="triangle", dataType="integer", &
-            dimName1="numTriangleVertex", dimName2="numTriangle", &
-            longName="Triangle vertex index", &
-            unitName="", timeVariant=.false.)
-        call NFWrap_New1DVar(fcard, &
-            varName="numVVT", dataType="integer", &
-            dimName="numPoint", &
-            longName="Real Voronoi cell vertex number", &
-            unitName="", timeVariant=.false.)
-        call NFWrap_New2DVar(fcard, &
-            varName="lonVVT", dataType="float", &
-            dimName1="maxNumVoronoiCellVertex", dimName2="numPoint", &
-            longName="Voronoi cell vertex longitude", &
-            unitName="degree_east", timeVariant=.false.)
-        call NFWrap_New2DVar(fcard, &
-            varName="latVVT", dataType="float", &
-            dimName1="maxNumVoronoiCellVertex", dimName2="numPoint", &
-            longName="Voronoi cell vertex latitude", &
-            unitName="degree_north", timeVariant=.false.)
-        call NFWrap_New1DVar(fcard, &
-            varName="areaVC", dataType="float", &
-            dimName="numPoint", &
-            longName="Voronoi cell area", &
-            unitName="m2", timeVariant=.false.)
+        call NFWrap_New1DVar(fcard, "lonPoint", "float", "numPoint", &
+            "Point longitude", "radian", .false.)
+        call NFWrap_New1DVar(fcard, "latPoint", "float", "numPoint", &
+            "Point latitude", "radian", .false.)
+        call NFWrap_New2DVar(fcard, "triangle", "integer", &
+            "numTriangleVertex", "numTriangle", &
+            "Triangle vertex index", "", .false.)
+        call NFWrap_New1DVar(fcard, "numVVT", "integer", "numPoint", &
+            "Real Voronoi cell vertex number", "", .false.)
+        call NFWrap_New2DVar(fcard, "lonVVT", "float", &
+            "maxNumVoronoiCellVertex", "numPoint", &
+            "Voronoi cell vertex longitude", "radian", .false.)
+        call NFWrap_New2DVar(fcard, "latVVT", "float", &
+            "maxNumVoronoiCellVertex", "numPoint", &
+            "Voronoi cell vertex latitude", "radian", .false.)
+        call NFWrap_New1DVar(fcard, "areaVC", "float", "numPoint", &
+            "Voronoi cell area", "m2", .false.)
         call NFWrap_Output1DVar(fcard, "lonPoint", lon)
         call NFWrap_Output1DVar(fcard, "latPoint", lat)
-        call NFWrap_Output1DVar(fcard, "lonCirc", lonCirc)
-        call NFWrap_Output1DVar(fcard, "latCirc", latCirc)
-        call NFWrap_Output1DVar(fcard, "radius", radius)
         call NFWrap_Output2DVar(fcard, "triangle", triangle)
         call NFWrap_Output1DVar(fcard, "numVVT", numVVT)
         call NFWrap_Output2DVar(fcard, "lonVVT", lonVVT)
@@ -711,14 +731,14 @@ contains
 
         DVT => DVTHead
         do i = 1, numDVT
-            lon(i) = real(DVT%SMP%lon*Rad2Deg)
-            lat(i) = real(DVT%SMP%lat*Rad2Deg)
+            lon(i) = real(DVT%SMP%lon)
+            lat(i) = real(DVT%SMP%lat)
             DVT => DVT%next
         end do
         DVT => VirtualDVTHead
         do i = 1, numVirtualDVT
-            lon(numDVT+i) = real(DVT%SMP%lon*Rad2Deg)
-            lat(numDVT+i) = real(DVT%SMP%lat*Rad2Deg)
+            lon(numDVT+i) = real(DVT%SMP%lon)
+            lat(numDVT+i) = real(DVT%SMP%lat)
             DVT => DVT%next
         end do
 
@@ -735,28 +755,18 @@ contains
             DT => DT%next
         end do
 
-        call NFWrap_CreateIrregular(filePath, timeVariant=.false., card=fcard)
+        call NFWrap_CreateIrregular(filePath, .false., fcard)
         call NFWrap_NewDim(fcard, "numPoint", numPoint)
         call NFWrap_NewDim(fcard, "numTriangle", numDT)
         call NFWrap_NewDim(fcard, "numTriangleVertex", 3)
-        call NFWrap_New1DVar(fcard, &
-            varName="lonPoint", dataType="float", &
-            dimName="numPoint", &
-            longName="Point longitude", &
-            unitName="degree_east", timeVariant=.false.)
-        call NFWrap_New1DVar(fcard, &
-            varName="latPoint", dataType="float", &
-            dimName="numPoint", &
-            longName="Point latitude", &
-            unitName="degree_north", timeVariant=.false.)
-        call NFWrap_New2DVar(fcard, &
-            varName="triangle", dataType="integer", &
-            dimName1="numTriangleVertex", dimName2="numTriangle", &
-            longName="Triangle vertex index", &
-            unitName="", &
-            timeVariant=.false.)
-        call NFWrap_Output1DVar(fcard, "lonPoint", lon)
-        call NFWrap_Output1DVar(fcard, "latPoint", lat)
+        call NFWrap_New1DVar(fcard, "lon", "float", "numPoint", &
+            "Point longitude", "radian", .false.)
+        call NFWrap_New1DVar(fcard, "lat", "float", "numPoint", &
+            "Point latitude", "radian", .false.)
+        call NFWrap_New2DVar(fcard, "triangle", "integer", "numTriangleVertex",&
+            "numTriangle", "Triangle vertex index", "", .false.)
+        call NFWrap_Output1DVar(fcard, "lon", lon)
+        call NFWrap_Output1DVar(fcard, "lat", lat)
         call NFWrap_Output2DVar(fcard, "triangle", triangle)
         call NFWrap_Close(fcard)
 
@@ -771,6 +781,45 @@ contains
     ! ######################### Private procedures ########################### !
     ! ######################################################################## !
 
+    subroutine GetTheFirstThreeDVTIndex(idx)
+        integer, intent(out) :: idx(3)
+
+        logical :: success = .false.
+
+#if (!defined DelaunayAndVoronoi_FullSpeed)
+        call MsgManager_RecordSpeaker("GetTheFirstThreeDVTIndex")
+#endif
+
+        do while (.not. success)
+            call RandomNumber_Get(1, numDVT, idx)
+            if (idx(1) /= idx(2) .and. &
+                idx(1) /= idx(3) .and. &
+                idx(2) /= idx(3)) then
+                success = .true.
+            end if
+        end do
+        call CommonUtils_Sort(idx)
+#if (defined DelaunayAndVoronoi_Debug)
+        if (.not. doRandom) then
+            idx = [idx1,idx2,idx3]
+            print *, "The first vertices are fixed to "//trim(int2str(idx1))// &
+                ", "//trim(int2str(idx2))//", "//trim(int2str(idx3))//" for debug!"
+        end if
+#endif
+#if (!defined DelaunayAndVoronoi_FullSpeed || defined DelaunayAndVoronoi_Debug)
+        call MsgManager_Speak(Notice, &
+            "The randomly chosen vertices are: "// &
+            trim(int2str(idx(1)))//", "//&
+            trim(int2str(idx(2)))//", "//&
+            trim(int2str(idx(3)))//".")
+#endif
+
+#if (!defined DelaunayAndVoronoi_FullSpeed)
+        call MsgManager_DeleteSpeaker
+#endif
+
+    end subroutine GetTheFirstThreeDVTIndex
+    
     ! ************************************************************************ !
     ! InitDelaunayTriangle                                                     !
     ! Purpose:                                                                 !
@@ -815,11 +864,15 @@ contains
             end if
             DVT1%id = -i
             allocate(DVT1%SMP)
+            DVT1%SMP%id = -i
             DVT1%numIcdDT = 1
             allocate(DVT1%icdDTHead)
             DVT(i+3)%ptr => DVT1
             call InverseRotationTransform(DVT(i)%ptr%SMP%lon, &
                 DVT(i)%ptr%SMP%lat, DVT1%SMP%lon, DVT1%SMP%lat, Zero, -PI05)
+            if (DVT1%SMP%lon < Zero) then
+                DVT1%SMP%lon = DVT1%SMP%lon+PI2
+            end if
             call CartesianTransformOnUnitSphere(DVT1%SMP%lon, DVT1%SMP%lat, &
                 DVT1%SMP%x, DVT1%SMP%y, DVT1%SMP%z)
         end do
@@ -827,13 +880,7 @@ contains
         ! Create the first eight triangles .............................. STEP 2
         ! Note: One of them is real Delaunay triangle, and the rest are
         !       virtual to cover all the sphere.
-        numDT = 1
-        numTotalDT = 1
-        allocate(DTHead)
-        DTHead%id = 1
-        DTCurr => DTHead
-        DT(1)%ptr => DTHead
-        do i = 2, 8
+        do i = 1, 8
             call NewDelaunayTriangle(DT(i)%ptr)
         end do
 
@@ -959,7 +1006,7 @@ contains
             newDT(4)%ptr%adjDT(3)%ptr => adjDT4
             ! Link newly inserted DVT to its incident DTs ............... STEP 3
             DVT%icdDTHead%ptr => newDT(1)%ptr
-            ! Make change to the old triangle's adjDT and DVT ........... STEP 4 
+            ! Make change to the old triangle's adjDT and DVT ........... STEP 4
             ! ...................................................... adjDT
             do i = 1, 3
                 if (associated(adjDT1%adjDT(i)%ptr, oldDT1)) then
@@ -1119,6 +1166,17 @@ contains
 
 #if (!defined DelaunayAndVoronoi_FullSpeed)
         call MsgManager_RecordSpeaker("DeleteVertex")
+#endif
+
+#if (defined DelaunayAndVoronoi_Debug)
+        print *, "Deleting vertex", DVT%id, "..."
+        call DVT%SMP%dump
+        linkDVT => DVT%linkDVTHead
+        do i = 1, DVT%numLinkDVT
+            call linkDVT%ptr%SMP%dump
+            linkDVT => linkDVT%next
+        end do
+        read(*, *)
 #endif
 
         icdDT => DVT%icdDTHead
@@ -1545,16 +1603,15 @@ contains
         end do IncidentDTLoop
 
     end subroutine ExtractIncidentDTAndLinkDVT
-    
+
     ! ************************************************************************ !
-    ! Orient(Relaxed)                                                          !
+    ! Orient                                                                   !
     ! Purpose:                                                                 !
     !   This is the one of two basic geometric tests to give the relation      !
     !   between a point (x0,y0,z0) and a plane containing (x1,y1,z1),          !
     !   (x2,y2,z2), and (0,0,0). There are three types of relation, i.e. left, !
     !   right, and on, where left is defined relative to an observer at        !
     !   (x1,y1,z1) facing (x2,y2,z2).                                          !
-    !   For relaxed Orient, the tolerance "eps" becomes more loose.            !
     ! Return value:                                                            !
     !   OrientLeft                                                             !
     !   OrientRight                                                            !
@@ -1569,7 +1626,13 @@ contains
         det = x0*(y1*z2-y2*z1)-y0*(x1*z2-x2*z1)+z0*(x1*y2-x2*y1)
 
 #if (defined DelaunayAndVoronoi_Debug)
-        if (printDet) print *, "In Orient, det =", det
+        if (printDet) then
+            print *, "x1 =", x1, "y1 =", y1, "z1 =", z1
+            print *, "x2 =", x2, "y2 =", y2, "z2 =", z2
+            print *, "x0 =", x0, "y0 =", y0, "z0 =", z0
+            print *, "In OrientRelaxed, det =", det
+            read(*, *)
+        end if
 #endif
 
         if (det > eps) then
@@ -1582,34 +1645,14 @@ contains
 
     end function Orient
 
-    integer function OrientRelaxed(x1, y1, z1, x2, y2, z2, x0, y0, z0)
-        real(RealKind), intent(in) :: x1, y1, z1, x2, y2, z2, x0, y0, z0
-
-        real(RealKind), parameter :: eps = 1.0e-6
-        real(RealKind) det
-
-        det = x0*(y1*z2-y2*z1)-y0*(x1*z2-x2*z1)+z0*(x1*y2-x2*y1)
-
-#if (defined DelaunayAndVoronoi_Debug)
-        if (printDet) print *, "In OrientRelaxed, det =", det
-#endif
-
-        if (det > eps) then
-            OrientRelaxed = OrientLeft
-        else if (-det > eps) then
-            OrientRelaxed = OrientRight
-        else
-            OrientRelaxed = OrientOn
-        end if
-
-    end function OrientRelaxed
-
     ! ************************************************************************ !
     ! InTriangle(Relaxed)                                                      !
     ! Purpose:                                                                 !
     !   This is a derived geometric test from "Orient". It gives the relation  !
     !   between a point (DVT) and a triangle (DT). There are four types of     !
     !   relation, i.e. inside, outside, on one edge and on one vertex.         !
+    !   For relaxed InTriangle, the overlap with virtual DVTs situation will   !
+    !   be checked.                                                            !
     ! Return value:                                                            !
     !   InsideTriangle                                                         !
     !   OutsideTriangle                                                        !
@@ -1674,11 +1717,20 @@ contains
         type(DelaunayTriangle), intent(in) :: DT
         type(DelaunayVertex), intent(in) :: DVT
 
+        real(RealKind), parameter :: eps = 1.0e-4
         real(RealKind) x(3), y(3), z(3), x0, y0, z0
-        integer i, k, ret, onPlane(2)
+        integer i, j, k, ret, onPlane(2)
 
         ! Copy for short-hand
         do i = 1, 3
+            if (DT%DVT(i)%ptr%id < 0) then
+                ! For virtual DVT, first judge whether DVT overlaps it.
+                if (abs(DT%DVT(i)%ptr%SMP%lon-DVT%SMP%lon) < eps .and. &
+                    abs(DT%DVT(i)%ptr%SMP%lat-DVT%SMP%lat) < eps) then
+                    InTriangleRelaxed = -i
+                    return
+                end if
+            end if
             x(i) = DT%DVT(i)%ptr%SMP%x
             y(i) = DT%DVT(i)%ptr%SMP%y
             z(i) = DT%DVT(i)%ptr%SMP%z
@@ -1689,9 +1741,8 @@ contains
 
         k = 0
         do i = 1, 3
-            ret = OrientRelaxed(x(i),      y(i),      z(i),    &
-                                x(ip1(i)), y(ip1(i)), z(ip1(i)), &
-                                x0,        y0,        z0)
+            j = ip1(i)
+            ret = Orient(x(i), y(i), z(i), x(j), y(j), z(j), x0, y0, z0)
             if (ret == OrientRight) then
                 InTriangleRelaxed = OutsideTriangle
                 return
@@ -1820,7 +1871,10 @@ contains
             L = sqrt(L)
             C = N/L
             call InverseCartesianTransformOnUnitSphere( &
-                DT%lonCirc, DT%latCirc, C(1), C(2), C(3))
+                DT%cnt%lon, DT%cnt%lat, C(1), C(2), C(3))
+            if (DT%cnt%lon < Zero) then
+                DT%cnt%lon = DT%cnt%lon+PI2
+            end if
             tmp = (DT%DVT(1)%ptr%SMP%x*C(1)+ &
                    DT%DVT(1)%ptr%SMP%y*C(2)+ &
                    DT%DVT(1)%ptr%SMP%z*C(3))
@@ -1845,18 +1899,22 @@ contains
     subroutine NewDelaunayTriangle(DT)
         type(DelaunayTriangle), intent(out), pointer :: DT
 
-        type(DelaunayTriangle), pointer :: DT1
+        type(DelaunayTriangle), pointer, save :: DTCurr => null()
 
         numDT = numDT+1
         numTotalDT = numTotalDT+1
-        DT1 => DTCurr
-        allocate(DT1%next)
-        DT1 => DT1%next
-        DT1%id = numTotalDT
-        DT1%prev => DTCurr
-        DTCurr%next => DT1
-        DTCurr => DT1
-        DT => DT1
+        if (numDT == 1) then
+            allocate(DTHead)
+            DTCurr => DTHead
+        else
+            DT => DTCurr
+            allocate(DTCurr%next)
+            DTCurr => DTCurr%next
+            DTCurr%prev => DT
+            DT%next => DTCurr
+        end if
+        DTCurr%id = numTotalDT
+        DT => DTCurr
 
 #if (!defined DelaunayAndVoronoi_FullSpeed)
 #if (defined DelaunayAndVoronoi_Debug && defined DelaunayAndVoronoi_Verbose)
@@ -2178,27 +2236,29 @@ contains
     subroutine RecordObsoleteTriangle(obsDT)
         type(DelaunayTriangle), intent(in), target :: obsDT
 
-        if (numObsDT == 0) then
+        type(DelaunayTrianglePointerList), pointer, save :: obsDTCurr => null()
+
+        numObsDT = numObsDT+1
+        if (numObsDT == 1) then
             allocate(obsDTHead)
             obsDTCurr => obsDTHead
-            numObsDT = 1
         else
             allocate(obsDTCurr%next)
             obsDTCurr => obsDTCurr%next
-            numObsDT = numObsDT+1
         end if
         obsDTCurr%ptr => obsDT
 
     end subroutine RecordObsoleteTriangle
 
     subroutine DeleteObsoleteTriangle
+        type(DelaunayTrianglePointerList), pointer :: obsDT
         integer i
 
         do i = 1, numObsDT
-            obsDTCurr => obsDTHead
-            call DeleteDelaunayTriangle(obsDTCurr%ptr)
-            obsDTHead => obsDTCurr%next
-            deallocate(obsDTCurr)
+            obsDT => obsDTHead
+            call DeleteDelaunayTriangle(obsDT%ptr)
+            obsDTHead => obsDT%next
+            deallocate(obsDT)
         end do
         numObsDT = 0
     
@@ -2213,27 +2273,29 @@ contains
     subroutine RecordTemporalTriangle(tmpDT)
         type(DelaunayTriangle), intent(in), target :: tmpDT
 
-        if (numTmpDT == 0) then
+        type(DelaunayTrianglePointerList), pointer, save :: tmpDTCurr => null()
+
+        numTmpDT = numTmpDT+1
+        if (numTmpDT == 1) then
             allocate(tmpDTHead)
             tmpDTCurr => tmpDTHead
-            numTmpDT = 1
         else
             allocate(tmpDTCurr%next)
             tmpDTCurr => tmpDTCurr%next
-            numTmpDT = numTmpDT+1
         end if
         tmpDTCurr%ptr => tmpDT
 
     end subroutine RecordTemporalTriangle
 
     subroutine DeleteTemporalTriangle
+        type(DelaunayTrianglePointerList), pointer :: tmpDT
         integer i
 
         do i = 1, numTmpDT
-            tmpDTCurr => tmpDTHead
-            call DeleteDelaunayTriangle(tmpDTCurr%ptr)
-            tmpDTHead => tmpDTCurr%next
-            deallocate(tmpDTCurr)
+            tmpDT => tmpDTHead
+            call DeleteDelaunayTriangle(tmpDT%ptr)
+            tmpDTHead => tmpDT%next
+            deallocate(tmpDT)
         end do
         numTmpDT = 0
 
@@ -2268,7 +2330,8 @@ contains
     subroutine PrintTriangleTopology(DT)
         type(DelaunayTriangle), intent(in) :: DT
 
-        write(*, "('Triangle (ID -', I8, ')')") DT%id
+        write(*, "('Triangle ID - ')", advance="no")
+        write(*, *) trim(int2str(DT%id))
         write(*, "('  Vertex ID: ', 3I8)") &
             DT%DVT(1)%ptr%id, DT%DVT(2)%ptr%id, DT%DVT(3)%ptr%id
         write(*, "('  Adjacent triangle ID: ', 3I8)") &
@@ -2283,7 +2346,8 @@ contains
         type(DelaunayVertexPointerList), pointer :: linkDVT
         integer i
 
-        write(*, "('Vertex (ID -', I5, ')')") DVT%id
+        write(*, "('Vertex ID - ')", advance="no")
+        write(*, *) trim(int2str(DVT%id))
         write(*, "('  Incident triangle ID: ')", advance="no")
         icdDT => DVT%icdDTHead
         do i = 1, DVT%numIcdDT
@@ -2291,13 +2355,15 @@ contains
             icdDT => icdDT%next
         end do
         write(*, *)
-        write(*, "('  Link vertex ID: ')", advance="no")
-        linkDVT => DVT%linkDVTHead
-        do i = 1, DVT%numLinkDVT
-            write(*, "(I8)", advance="no") linkDVT%ptr%id
-            linkDVT => linkDVT%next
-        end do
-        write(*, *)
+        if (associated(DVT%linkDVTHead)) then
+            write(*, "('  Link vertex ID: ')", advance="no")
+            linkDVT => DVT%linkDVTHead
+            do i = 1, DVT%numLinkDVT
+                write(*, "(I8)", advance="no") linkDVT%ptr%id
+                linkDVT => linkDVT%next
+            end do
+            write(*, *)
+        end if
     
     end subroutine PrintVertexTopology
 
@@ -2305,10 +2371,12 @@ contains
         type(VoronoiCell), intent(in) :: VC
         integer i
 
-        write(*, "('Voronoi cell (ID -', I5, ')')") VC%id
+        write(*, "('Voronoi cell ID - ')", advance="no")
+        write(*, *) trim(int2str(VC%id))
         write(*, "('  Vertex coordinate (in degree): ')")
-        do i = 1, VC%numVVT
-            write(*, "(2F10.3)") VC%lonVVT(i)*Rad2Deg, VC%latVVT(i)*Rad2Deg
+        do i = 1, VC%SMP%bnd%numVtx
+            write(*, "(2F10.3)") &
+                VC%SMP%bnd%vtx(i)%lon*Rad2Deg, VC%SMP%bnd%vtx(i)%lat*Rad2Deg
         end do
     
     end subroutine PrintVoronoiCell
@@ -2319,11 +2387,13 @@ contains
         type(DelaunayVertexPointerList), pointer :: incDVT
         integer i
 
-        write(*, "('Triangle (ID -', I5, ')')") DT%id
-        write(*, "('  Contained vertex ID: ')")
+        write(*, "('Triangle ID - ')", advance="no")
+        write(*, *) trim(int2str(DT%id))
+        write(*, "('  Contained vertex IDs ')", advance="no")
+        write(*, *) trim(int2str(DT%numIncDVT))
         incDVT => DT%incDVTHead
         do i = 1, DT%numIncDVT
-            write(*, "(I5)", advance="no") incDVT%ptr%id
+            write(*, "(I6)", advance="no") incDVT%ptr%id
             incDVT => incDVT%next
         end do
         write(*, *)
@@ -2337,7 +2407,7 @@ contains
         write(*, "('Obsolete triangles ID:')")
         obsDT => obsDTHead
         do i = 1, numObsDT
-            write(*, "(I5)", advance="no") obsDT%ptr%id
+            write(*, "(I8)", advance="no") obsDT%ptr%id
         end do
         write(*, *)
 
@@ -2350,7 +2420,7 @@ contains
         write(*, "('Temporal triangles ID:')")
         tmpDT => tmpDTHead
         do i = 1, numTmpDT
-            write(*, "(I5)", advance="no") tmpDT%ptr%id
+            write(*, "(I8)", advance="no") tmpDT%ptr%id
         end do
         write(*, *)
 

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-fileWildCard=$1
+echo "Input the data file or wildcard:"
+read -p "> " fileWildCard
 
 echo "Plot Delaunay triangulation? (y/n)"
 read -p "> " ans
@@ -26,10 +27,35 @@ else
     DVT=False
 fi
 
+mapProj="CE"
+echo "Input map projection (NH/SH/CE):"
+read -p "[Default: CE] > " ans
+if [ -n "$ans" ]; then
+    mapProj=$ans
+fi
+
+minLat="80"
+if [ $mapProj == "NH" ]; then
+    echo "Input the southest latitude to view:"
+    read -p "[Default: 80] > " ans
+    if [ -n "$ans" ]; then
+        minLat=$ans
+    fi
+fi
+
+maxLat="-80"
+if [ $mapProj == "SH" ]; then
+    echo "Input the northest latitude to view:"
+    read -p "[Default: -80] > " ans
+    if [ -n "$ans" ]; then
+        maxLat=$ans
+    fi
+fi
+
 for file in $(ls ${fileWildCard})
 do
-    figure=$(basename ${file} .nc)
-    echo "Plotting ${file} ... "
+    figure=$(basename $file .nc)
+    echo "Plotting $file ... "
     ncl <<-EOF
     load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
     load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_csm.ncl"
@@ -37,13 +63,21 @@ do
 
     begin
 
-        f = addfile("${file}", "r")
+        Rad2Deg = 45./atan(1.)
+
+        f = addfile("$file", "r")
 
         numPoint = dimsizes(f->lonPoint)
 
+        lonDVT = f->lonPoint*Rad2Deg
+        latDVT = f->latPoint*Rad2Deg
+
+        lonVVT = f->lonVVT*Rad2Deg
+        latVVT = f->latVVT*Rad2Deg
+
         numTriangle = dimsizes(f->triangle(:,0))
 
-        wks = gsn_open_wks("pdf", "${figure}")
+        wks = gsn_open_wks("pdf", "$figure")
 
         ; Plot map
         mapRes = True
@@ -52,18 +86,19 @@ do
         mapRes@mpGreatCircleLinesOn = True
         mapRes@mpGridAndLimbOn = True
         mapRes@mpGridLineColor = "Background"
-        mapRes@mpProjection = "Satellite"
-        mapRes@mpCenterLonF = 90
-        mapRes@mpCenterLatF = 45
-        ;mapRes@mpLimitMode = "Angles"
-        ;mapRes@mpLeftAngleF = 2
-        ;mapRes@mpRightAngleF = 2
-        ;mapRes@mpTopAngleF = 2
-        ;mapRes@mpBottomAngleF = 2
-        ;mapRes@mpProjection = "Stereographic"
-        ;mapRes@gsnPolar = "NH"
-        ;mapRes@mpLimitMode = "LatLon"
-        ;mapRes@mpMinLatF = 10
+
+        mapProj = "$mapProj"
+
+        if (mapProj .eq. "SH") then
+            mapRes@mpProjection = "Stereographic"
+            mapRes@gsnPolar = "SH"
+            mapRes@mpMaxLatF = $maxLat
+        end if
+        if (mapProj .eq. "NH") then
+            mapRes@mpProjection = "Stereographic"
+            mapRes@gsnPolar = "NH"
+            mapRes@mpMinLatF = $minLat
+        end if
 
         map = gsn_csm_map(wks, mapRes)
 
@@ -74,46 +109,47 @@ do
             textRes@txFont = "helvetica-bold"
 
             do i = 0, numPoint-1
-                text = gsn_add_text(wks, map, sprinti("%d", i+1), f->lonPoint(i)-2, f->latPoint(i)-2, textRes)
+                text = gsn_add_text(wks, map, sprinti("%d", i+1), \
+                    lonDVT(i)-0.5, latDVT(i)-0.5, textRes)
             end do
         end if
 
         draw(map)
 
-        if (${DT}) then
+        if ($DT) then
             ; Plot Delaunay triangle edges
-            system("echo plotting triangle edges ...")
+            system("echo Plotting triangle edges ...")
             
             edgeRes = True
             edgeRes@gsLineThicknessF = 0.5
             edgeRes@gsLineColor = "blue"
 
-            lon = new(4, "float")
-            lat = new(4, "float")
+            lonVtx = new(4, "float")
+            latVtx = new(4, "float")
             do i = 0, numTriangle-1
                 numVertex = 0
                 do j = 0, 2
                     k = f->triangle(i,j)-1
                     if (k .ge. 0) then
-                        lon(numVertex) = f->lonPoint(k)
-                        lat(numVertex) = f->latPoint(k)
+                        lonVtx(numVertex) = lonDVT(k)
+                        latVtx(numVertex) = latDVT(k)
                         numVertex = numVertex+1
                     end if
                 end do
                 if (numVertex .gt. 1) then
-                    lon(numVertex) = lon(0)
-                    lat(numVertex) = lat(0)
-                    gsn_polyline(wks, map, lon(0:numVertex), lat(0:numVertex), edgeRes)
+                    lonVtx(numVertex) = lonVtx(0)
+                    latVtx(numVertex) = latVtx(0)
+                    gsn_polyline(wks, map, lonVtx(0:numVertex), latVtx(0:numVertex), edgeRes)
                 end if
             end do
 
-            delete(lon)
-            delete(lat)
+            delete(lonVtx)
+            delete(latVtx)
         end if
 
         if (False) then
             ; Plot circumcirlces
-            system("echo plotting circumcirlces")
+            system("echo Plotting circumcirlces")
 
             circRes = True
             circRes@gsLineThicknessF = 0.5
@@ -127,48 +163,46 @@ do
             end do
         end if
 
-        if (${VD}) then
+        if ($VD) then
             ; Plot Voronoi cell edges
-            system("echo plotting Voronoi cells")
+            system("echo Plotting Voronoi cells")
 
             edgeRes = True
             edgeRes@gsLineThicknessF = 0.5
             edgeRes@gsLineColor = "red"
 
             do i = 0, numPoint-1
-                lon = new(f->numVVT(i)+1, "float")
-                lat = new(f->numVVT(i)+1, "float")
+                lonVtx = new(f->numVVT(i)+1, "float")
+                latVtx = new(f->numVVT(i)+1, "float")
                 do j = 0, f->numVVT(i)-1
-                    lon(j) = f->lonVVT(i,j)
-                    lat(j) = f->latVVT(i,j)
+                    lonVtx(j) = lonVVT(i,j)
+                    latVtx(j) = latVVT(i,j)
                 end do
-                lon(f->numVVT(i)) = lon(0)
-                lat(f->numVVT(i)) = lat(0)
-                gsn_polyline(wks, map, lon, lat, edgeRes)
-                delete(lon)
-                delete(lat)
+                lonVtx(f->numVVT(i)) = lonVtx(0)
+                latVtx(f->numVVT(i)) = latVtx(0)
+                gsn_polyline(wks, map, lonVtx, latVtx, edgeRes)
+                delete(lonVtx)
+                delete(latVtx)
             end do
         end if
 
-        if (${DVT}) then
+        if ($DVT) then
             ; Plot vertices
-            system("echo plotting vertices")
+            system("echo Plotting vertices")
 
             vertexRes = True
             vertexRes@gsMarkerIndex = 1
             vertexRes@gsMarkerSizeF = 0.005
             vertexRes@gsMarkerColor = "red"
 
-            gsn_polymarker(wks, map, f->lonPoint, f->latPoint, vertexRes)
+            gsn_polymarker(wks, map, lonDVT, latDVT, vertexRes)
         end if
 
         frame(wks)
 
     end
 EOF
-    if [ -f "${figure}.pdf" ]; then
-        echo "${figure}.pdf generated."
-    else
-        echo "NCL error!"
+    if [ -f "$figure.pdf" ]; then
+        echo "$figure.pdf generated."
     fi
 done

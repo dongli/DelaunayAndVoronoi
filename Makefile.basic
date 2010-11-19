@@ -1,47 +1,52 @@
-# compute the root directory
-ROOT_DIR = $(dir $(shell pwd))
+# Compute the root directory
+# Note:
+#   The upper directory which contains "Makefile.basic" is the root directory.
+ROOT_DIR = $(shell while [ ! -f Makefile.basic ]; do cd ..; done; pwd)
 
-# set the source code directories
-VPATH = ${ROOT_DIR}/Util:${ROOT_DIR}/Core
+# Set the source code directories
+VPATH = ${ROOT_DIR}/Core:${ROOT_DIR}/Util:${ROOT_DIR}/UnitTest
 
-# fortran compiler options
-FC = gfortran
+# Fortran compiler options
+FC = ifort
 ifeq ($(FC), ifort)
 FFLAGS = -fp-model precise -fp-speculation=safe
-DEBUG_FLAGS = -O0 -g -check bounds -traceback
-OPTIONS += -DFC_IFORT
+ifeq ($(DEBUG), yes)
+FFLAGS += -O0 -g -check bounds -traceback
+endif
+OPTION += -DFC_IFORT
 endif
 ifeq ($(FC), gfortran)
 FFLAGS =
-DEBUG_FLAGS = -g -DDEBUG
-OPTIONS += -DFC_GFORTRAN
+ifeq ($(DEBUG), yes)
+FFLAGS += -O0 -g
+endif
+OPTION += -DFC_GFORTRAN
 endif
 
-# external libraries
+# External libraries
 NETCDF_ROOT = $(strip $(subst /bin/ncdump, , $(shell which ncdump)))
 NETCDF_INC = -I${NETCDF_ROOT}/include
 NETCDF_LIB = -L${NETCDF_ROOT}/lib -lnetcdf -lcurl
 
 LIBRARY = ${NETCDF_INC} ${NETCDF_LIB}
 
-# the rule for building dependencies (refer to "implicit rule")
+# The rule for building dependencies (refer to "implicit rule")
 %.o: %.F90
 	@echo " Creating dependency" $@
 	@echo $(seperator)
-	@${FC} -c $< ${DEBUG_FLAGS} ${OPTIONS} ${FFLAGS} ${NETCDF_INC}
+	@${FC} -c $< ${OPTION} ${FFLAGS} ${NETCDF_INC}
 
 # the rule for building targets (refer to "static pattern rule")
 all: start ${TARGET} end
 
 ${TARGET}: %: $(addsuffix .F90, %) ${OBJECT}
 	@echo " Creating target $@"
-	@if [ "${OPTIONS}" != "" ]; then \
+	@if [ "${OPTION}" != "" ]; then \
              echo " Configurations:"; \
-             echo "   ${OPTIONS}"; \
+             echo "   ${OPTION}"; \
          fi
 	@${FC} -o $@ $(addsuffix .F90, $@) \
-         ${OBJECT} ${OPTIONS} ${LIBRARY} \
-         ${DEBUG_FLAGS} ${FFLAGS} && \
+         ${OBJECT} ${OPTION} ${LIBRARY} ${FFLAGS} && \
          echo " ---> $@ is created"
 	@echo ${seperator}
 
