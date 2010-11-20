@@ -674,34 +674,31 @@ contains
         end do
 
         call NFWrap_CreateIrregular(filePath, timeVariant=.false., card=fcard)
-        call NFWrap_NewDim(fcard, "numPoint", numPoint)
-        call NFWrap_NewDim(fcard, "numTriangle", numDT)
-        call NFWrap_NewDim(fcard, "numTriangleVertex", 3)
-        call NFWrap_NewDim(fcard, "maxNumVoronoiCellVertex", maxNumVVT)
-        call NFWrap_New1DVar(fcard, "lonPoint", "float", "numPoint", &
+        call NFWrap_NewDim(fcard, "numPnt", numPoint)
+        call NFWrap_NewDim(fcard, "numTri", numDT)
+        call NFWrap_NewDim(fcard, "numTriVtx", 3)
+        call NFWrap_NewDim(fcard, "maxNumVtx", maxNumVVT)
+        call NFWrap_New1DVar(fcard, "lonPnt", "float", "numPnt", &
             "Point longitude", "radian", .false.)
-        call NFWrap_New1DVar(fcard, "latPoint", "float", "numPoint", &
+        call NFWrap_New1DVar(fcard, "latPnt", "float", "numPnt", &
             "Point latitude", "radian", .false.)
-        call NFWrap_New2DVar(fcard, "triangle", "integer", &
-            "numTriangleVertex", "numTriangle", &
-            "Triangle vertex index", "", .false.)
-        call NFWrap_New1DVar(fcard, "numVVT", "integer", "numPoint", &
+        call NFWrap_New2DVar(fcard, "triIdx", "integer", &
+            "numTriVtx", "numTri", "Triangle vertex index", "", .false.)
+        call NFWrap_New1DVar(fcard, "numVtx", "integer", "numPnt", &
             "Real Voronoi cell vertex number", "", .false.)
-        call NFWrap_New2DVar(fcard, "lonVVT", "float", &
-            "maxNumVoronoiCellVertex", "numPoint", &
-            "Voronoi cell vertex longitude", "radian", .false.)
-        call NFWrap_New2DVar(fcard, "latVVT", "float", &
-            "maxNumVoronoiCellVertex", "numPoint", &
-            "Voronoi cell vertex latitude", "radian", .false.)
-        call NFWrap_New1DVar(fcard, "areaVC", "float", "numPoint", &
+        call NFWrap_New2DVar(fcard, "lonVtx", "float", &
+            "maxNumVtx", "numPnt", "Voronoi cell vertex longitude", "radian", .false.)
+        call NFWrap_New2DVar(fcard, "latVtx", "float", &
+            "maxNumVtx", "numPnt", "Voronoi cell vertex latitude", "radian", .false.)
+        call NFWrap_New1DVar(fcard, "area", "float", "numPnt", &
             "Voronoi cell area", "m2", .false.)
-        call NFWrap_Output1DVar(fcard, "lonPoint", lon)
-        call NFWrap_Output1DVar(fcard, "latPoint", lat)
-        call NFWrap_Output2DVar(fcard, "triangle", triangle)
-        call NFWrap_Output1DVar(fcard, "numVVT", numVVT)
-        call NFWrap_Output2DVar(fcard, "lonVVT", lonVVT)
-        call NFWrap_Output2DVar(fcard, "latVVT", latVVT)
-        call NFWrap_Output1DVar(fcard, "areaVC", areaVC)
+        call NFWrap_Output1DVar(fcard, "lonPnt", lon)
+        call NFWrap_Output1DVar(fcard, "latPnt", lat)
+        call NFWrap_Output2DVar(fcard, "triIdx", triangle)
+        call NFWrap_Output1DVar(fcard, "numVtx", numVVT)
+        call NFWrap_Output2DVar(fcard, "lonVtx", lonVVT)
+        call NFWrap_Output2DVar(fcard, "latVtx", latVVT)
+        call NFWrap_Output1DVar(fcard, "area", areaVC)
         call NFWrap_Close(fcard)
 
 #if (!defined DelaunayAndVoronoi_FullSpeed)
@@ -756,18 +753,18 @@ contains
         end do
 
         call NFWrap_CreateIrregular(filePath, .false., fcard)
-        call NFWrap_NewDim(fcard, "numPoint", numPoint)
-        call NFWrap_NewDim(fcard, "numTriangle", numDT)
-        call NFWrap_NewDim(fcard, "numTriangleVertex", 3)
-        call NFWrap_New1DVar(fcard, "lon", "float", "numPoint", &
+        call NFWrap_NewDim(fcard, "numPnt", numPoint)
+        call NFWrap_NewDim(fcard, "numTri", numDT)
+        call NFWrap_NewDim(fcard, "numTriVtx", 3)
+        call NFWrap_New1DVar(fcard, "lonPnt", "float", "numPnt", &
             "Point longitude", "radian", .false.)
-        call NFWrap_New1DVar(fcard, "lat", "float", "numPoint", &
+        call NFWrap_New1DVar(fcard, "latPnt", "float", "numPnt", &
             "Point latitude", "radian", .false.)
-        call NFWrap_New2DVar(fcard, "triangle", "integer", "numTriangleVertex",&
-            "numTriangle", "Triangle vertex index", "", .false.)
-        call NFWrap_Output1DVar(fcard, "lon", lon)
-        call NFWrap_Output1DVar(fcard, "lat", lat)
-        call NFWrap_Output2DVar(fcard, "triangle", triangle)
+        call NFWrap_New2DVar(fcard, "triIdx", "integer", "numTriVtx",&
+            "numTri", "Triangle vertex index", "", .false.)
+        call NFWrap_Output1DVar(fcard, "lonPnt", lon)
+        call NFWrap_Output1DVar(fcard, "latPnt", lat)
+        call NFWrap_Output2DVar(fcard, "triIdx", triangle)
         call NFWrap_Close(fcard)
 
 #if (!defined DelaunayAndVoronoi_FullSpeed)

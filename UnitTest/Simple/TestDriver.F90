@@ -23,7 +23,7 @@ program TestDriver
             lon(i) = (i-2)*dlon
             lat(i) = PI/3.0d0
         end do
-    else if (.false.) then
+    else if (.true.) then
         ! Case 2
         n = 9
         allocate(lon(n))
@@ -53,7 +53,10 @@ program TestDriver
     call DelaunayAndVoronoi_LinkSample
     call ConstructDelaunayTriangulation
     call ExtractVoronoiDiagram
-    !call DelaunayAndVoronoi_Report
+#if (defined DelaunayAndVoronoi_Hemisphere)
+    call DelaunayAndVoronoi_OutputDelaunay("only_DT_output.nc")
+#else
     call DelaunayAndVoronoi_Output("output.nc")
+#endif
 
 end program TestDriver

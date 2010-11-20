@@ -4,7 +4,7 @@
 ROOT_DIR = $(shell while [ ! -f Makefile.basic ]; do cd ..; done; pwd)
 
 # Set the source code directories
-VPATH = ${ROOT_DIR}/Core:${ROOT_DIR}/Util:${ROOT_DIR}/UnitTest
+VPATH = $(ROOT_DIR)/Core:$(ROOT_DIR)/Util
 
 # Fortran compiler options
 FC = ifort
@@ -25,30 +25,30 @@ endif
 
 # External libraries
 NETCDF_ROOT = $(strip $(subst /bin/ncdump, , $(shell which ncdump)))
-NETCDF_INC = -I${NETCDF_ROOT}/include
-NETCDF_LIB = -L${NETCDF_ROOT}/lib -lnetcdf -lcurl
+NETCDF_INC = -I$(NETCDF_ROOT)/include
+NETCDF_LIB = -L$(NETCDF_ROOT)/lib -lnetcdf -lcurl
 
-LIBRARY = ${NETCDF_INC} ${NETCDF_LIB}
+LIBRARY = $(NETCDF_INC) $(NETCDF_LIB)
 
 # The rule for building dependencies (refer to "implicit rule")
 %.o: %.F90
 	@echo " Creating dependency" $@
 	@echo $(seperator)
-	@${FC} -c $< ${OPTION} ${FFLAGS} ${NETCDF_INC}
+	@$(FC) -c $< $(OPTION) $(FFLAGS) $(NETCDF_INC)
 
 # the rule for building targets (refer to "static pattern rule")
-all: start ${TARGET} end
+all: start $(TARGET) end
 
-${TARGET}: %: $(addsuffix .F90, %) ${OBJECT}
+$(TARGET): %: $(addsuffix .F90, %) $(OBJECT)
 	@echo " Creating target $@"
-	@if [ "${OPTION}" != "" ]; then \
+	@if [ "$(OPTION)" != "" ]; then \
              echo " Configurations:"; \
-             echo "   ${OPTION}"; \
+             echo "   $(OPTION)"; \
          fi
-	@${FC} -o $@ $(addsuffix .F90, $@) \
-         ${OBJECT} ${OPTION} ${LIBRARY} ${FFLAGS} && \
+	@$(FC) -o $@ $(addsuffix .F90, $@) \
+         $(OBJECT) $(OPTION) $(LIBRARY) $(FFLAGS) && \
          echo " ---> $@ is created"
-	@echo ${seperator}
+	@echo $(seperator)
 
 # some decorations
 seperator       = "----------------------------------------------"
@@ -58,13 +58,13 @@ clean:
 	@if ls *.o > /dev/null 2>&1; then rm *.o; fi
 	@if ls *.mod > /dev/null 2>&1; then rm *.mod; fi
 	@if ls *.i90 > /dev/null 2>&1; then rm *.i90; fi
-	@for target in ${TARGET}; do if ls $$target > /dev/null 2>&1; then rm $$target; fi; done
+	@for target in $(TARGET); do if ls $$target > /dev/null 2>&1; then rm $$target; fi; done
 	@echo " Project has been cleaned."
 
 start:
-	@echo ${seperator}
-	@echo " ${PROJECT_NAME}"
-	@echo ${seperator}
+	@echo $(seperator)
+	@echo " $(PROJECT_NAME)"
+	@echo $(seperator)
 
 end:
 	@echo " Finished"

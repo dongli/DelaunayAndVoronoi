@@ -6,20 +6,17 @@ program TestRealData
 
     implicit none
 
-    character(255) filePath
     type(FileCard) fcard
 
-    integer numPoint, numTimeStep
+    integer numPoint
     real(RealKind), allocatable :: lon(:), lat(:)
 
-    call get_command_argument(1, filePath)
-
-    call NFWrap_OpenForRead(filePath, fcard)
-    call NFWrap_GetDimSize(fcard, "q_num", numPoint)
-    call NFWrap_GetDimSize(fcard, "time", numTimeStep)
+    call NFWrap_OpenForRead("C02562.global.nc", fcard)
+    call NFWrap_GetDimSize(fcard, "grid_size", numPoint)
     allocate(lon(numPoint), lat(numPoint))
-    call NFWrap_Input1DVar(fcard, "q_lon", lon, numTimeStep)
-    call NFWrap_Input1DVar(fcard, "q_lat", lat, numTimeStep)
+    call NFWrap_Input1DVar(fcard, "grid_center_lon", lon)
+    call NFWrap_Input1DVar(fcard, "grid_center_lat", lat)
+    call NFWrap_Close(fcard)
 
     call SampleManager_Init(numPoint)
     call SampleManager_Set(lon, lat)

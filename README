@@ -9,11 +9,14 @@ Description:
   update when all the data points can move without construct  from  the scratch.
   It originates from the need of space tessellation in my numerical scheme (TTS)
   for solving linear advection problem.
+
+  All the codes are written in Fortran 95/2003. High degree of modularization is
+  realized. The internal data structure is completely hidden from users.
 ________________________________________________________________________________
 Directory structure:
 
   The program is made up by several modules in "Core" and "Util". In "UnitTest",
-  there are some tests can be run. A script in "NCLScripts" can be used to show
+  there are some tests can be run. The scripts in "PlotTool" can be used to show
   the output graphically.
 ________________________________________________________________________________
 Dependencies:
@@ -40,17 +43,21 @@ Usage:
   The program has been compiled using "ifort" and "gfortran", you can change
   the compiler in "Makefile.basic" for FC macro.
 
-  To visualize the results, use the scripts in "NCLScripts":
+  To visualize the results, use the scripts in "PlotTool":
 
       cd <directory where results are>
-      <relative path to "NCLScripts">/plot.sh
+      <relative path to "PlotTool">/PlotDTVD.sh
 
-  It will plot all the NetCDF files in that directory, and generate a series of
-  PDF files with the same name of those files. You can change "plot.sh" for your
-  purpose.
+  And following some questions, it will generate PDF file(s) of the Delaunay
+  triangulation and Voronoi diagram projected on the sphere.
 ________________________________________________________________________________
 Current Development:
 
+Finished:
   - Only sphere manifold is considered (for atmospheric modelling).
   - Delaunay triangulation and its dual Voronoi diagram are finished.
+
+To be finished:
+  - Optimize the resulting Voronoi diagram to avoid short edges.
+  - Incoporate some efficient update methods to avoid intensive reconstruction.
 ________________________________________________________________________________
