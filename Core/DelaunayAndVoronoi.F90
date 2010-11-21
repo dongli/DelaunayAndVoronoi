@@ -1908,9 +1908,6 @@ contains
             DT%cnt%z = N(3)/L
             call InverseCartesianTransformOnUnitSphere( &
                 DT%cnt%lon, DT%cnt%lat, DT%cnt%x, DT%cnt%y, DT%cnt%z)
-            if (DT%cnt%lon < Zero) then
-                DT%cnt%lon = DT%cnt%lon+PI2
-            end if
             tmp = (DT%DVT(1)%ptr%smp%x*DT%cnt%x+ &
                    DT%DVT(1)%ptr%smp%y*DT%cnt%y+ &
                    DT%DVT(1)%ptr%smp%z*DT%cnt%z)

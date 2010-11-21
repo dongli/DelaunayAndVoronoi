@@ -90,11 +90,6 @@ contains
         character(*), intent(in) :: content
         character(*), intent(in), optional :: comment
 
-        if (speakers%n == 0) then
-            write(*, "('Error: MsgManager_Speak: Internal error!')")
-            stop
-        end if
-
         select case (type)
         case (Notice)
             write(*, "('Notice: ')", advance="no")

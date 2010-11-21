@@ -33,8 +33,17 @@ contains
                 end if
             end do
         end do
-    
+
     end subroutine SortInteger
 
-end module CommonUtils
+    subroutine CrossProduct(x1, y1, z1, x2, y2, z2, x, y, z)
+        real(RealKind), intent(in) :: x1, y1, z1, x2, y2, z2
+        real(RealKind), intent(out) :: x, y, z
 
+        x = y1*z2-z1*y2
+        y = z1*x2-x1*z2
+        z = x1*y2-y1*x2
+
+    end subroutine CrossProduct
+
+end module CommonUtils
