@@ -23,7 +23,7 @@ program TestDriver
             lon(i) = (i-2)*dlon
             lat(i) = PI/3.0d0
         end do
-    else if (.true.) then
+    else if (.false.) then
         ! Case 2
         n = 9
         allocate(lon(n))
@@ -41,7 +41,7 @@ program TestDriver
         k = 1
         do j = 1, 10
             do i = 1, 10
-                lon(k) = dlon05+i*dlon
+                lon(k) = dlon05+(i-1)*dlon
                 lat(k) = PI05-dlat05-(j-1)*dlat
                 k = k+1
             end do
@@ -50,10 +50,12 @@ program TestDriver
 
     call SampleManager_Init(n)
     call SampleManager_Set(lon, lat)
+    !doRandom = .false.
+    !idx1 = 19; idx2 = 20; idx3 = 75
     call DelaunayAndVoronoi_LinkSample
     call ConstructDelaunayTriangulation
     call ExtractVoronoiDiagram
-#if (defined DelaunayAndVoronoi_Hemisphere)
+#if (defined KeepVirtualDVT)
     call DelaunayAndVoronoi_OutputDelaunay("only_DT_output.nc")
 #else
     call DelaunayAndVoronoi_Output("output.nc")

@@ -89,7 +89,7 @@ module DelaunayAndVoronoi
     type DelaunayVertex
         integer :: id = -1
         ! For geometry
-        type(Sample), pointer :: SMP => null()
+        type(Sample), pointer :: smp => null()
         ! For topology
         integer :: numIcdDT = 0 ! Incident triangles
         type(DelaunayTrianglePointerList), pointer :: icdDTHead => null()
@@ -134,7 +134,7 @@ module DelaunayAndVoronoi
     ! Voronoi diagram data structure
     type VoronoiCell
         integer :: id = -1
-        type(Sample), pointer :: SMP => null()
+        type(Sample), pointer :: smp => null()
         type(VoronoiCell), pointer :: prev => null()
         type(VoronoiCell), pointer :: next => null()
     end type VoronoiCell
@@ -208,7 +208,7 @@ contains
     ! ************************************************************************ !
 
     subroutine DelaunayAndVoronoi_LinkSample
-        type(Sample), pointer :: SMP
+        type(Sample), pointer :: smp
         type(DelaunayVertex), pointer :: DVT1, DVT2
         type(VoronoiCell), pointer :: VC1, VC2
         integer i
@@ -220,7 +220,7 @@ contains
         ! Initialize the Delaunay vertices,
         ! and link them with corresponding samples ...................... STEP 1
         numDVT = numSample
-        SMP => SMPHead
+        smp => smpHead
         do i = 1, numDVT
             if (i == 1) then
                 allocate(DVTHead)
@@ -233,15 +233,15 @@ contains
                 DVT2%next => DVT1
             end if
             DVT1%id = i
-            DVT1%SMP => SMP
+            DVT1%smp => smp
             DVT1%numIcdDT = 1
             allocate(DVT1%icdDTHead)
-            SMP => SMP%next
+            smp => smp%next
         end do
 
         ! Initialize the Voronoi cells .................................. STEP 2
         numVC = numSample
-        SMP => SMPHead
+        smp => smpHead
         do i = 1, numVC
             if (i == 1) then
                 allocate(VCHead)
@@ -254,8 +254,8 @@ contains
                 VC2%next => VC1
             end if
             VC1%id = i
-            VC1%SMP => SMP
-            SMP => SMP%next
+            VC1%smp => smp
+            smp => smp%next
         end do
 
         call RandomNumber_Start
@@ -428,9 +428,9 @@ contains
                         print *, "Point", obsDT%ptr%incDVTHead%ptr%id, "does not found its new DT."
                         call PrintTriangleTopology(obsDT%ptr)
                         do k = 1, 3
-                            call obsDT%ptr%DVT(k)%ptr%SMP%dump
+                            call obsDT%ptr%DVT(k)%ptr%smp%dump
                         end do
-                        call obsDT%ptr%incDVTHead%ptr%SMP%dump
+                        call obsDT%ptr%incDVTHead%ptr%smp%dump
                         stop
                     end if
 #endif
@@ -461,7 +461,7 @@ contains
             "Full lists of incident DTs and link DVTs for each DVT are extraced.")
 #endif
 
-#if (!defined DelaunayAndVoronoi_Hemisphere)
+#if (!defined KeepVirtualDVT)
         DVT1 => VirtualDVTHead
         do while (associated(DVT1))
             call DeleteVertex(DVT1)
@@ -498,6 +498,12 @@ contains
         type(DelaunayVertex), pointer :: DVT
         type(VoronoiCell), pointer :: VC
         type(DelaunayTrianglePointerList), pointer :: icdDT
+#if (!defined NoFixNegativeArea)
+        type(DelaunayTrianglePointerList), pointer :: icdDTNext
+        type(DelaunayVertex), pointer :: linkDVT
+        real(RealKind) dlon, dlat
+        logical flag
+#endif
         integer i, j
 #if (defined DelaunayAndVoronoi_Debug)
         real(RealKind) :: totalArea = 0.0e0
@@ -514,26 +520,57 @@ contains
         DVT => DVTHead
         VC => VCHead
         do i = 1, numDVT ! = numVC
+#if (!defined NoFixNegativeArea)
+            ! Handle the too-short-distance between circumcenters
+            ! Strategy: Merge them!
+            flag = .false.
+            icdDT => DVT%icdDTHead
+            do
+                icdDTNext => icdDT%next
+                dlon = icdDT%ptr%cnt%lon-icdDTNext%ptr%cnt%lon
+                dlat = icdDT%ptr%cnt%lat-icdDTNext%ptr%cnt%lat
+                if (abs(dlat) < 1.0e-6) then
+                    if (PI05-abs(icdDT%ptr%cnt%lat) < 1.0e-6 .or. &
+                        (abs(dlon) < 1.0e-6 .or. PI2-abs(dlon) < 1.0e-6)) then
+                        do j = 1, 3
+                            if (associated(icdDTNext%ptr%DVT(j)%ptr, DVT)) exit
+                        end do
+                        linkDVT => icdDTNext%ptr%DVT(ip1(j))%ptr
+                        call MergeIncidentTriangle(DVT, icdDT%ptr, icdDTNext%ptr, icdDT%ptr)
+                        call DeleteLinkVertex(DVT, linkDVT)
+                    else
+                        icdDT => icdDT%next
+                        flag = .true.
+                    end if
+                else
+                    icdDT => icdDT%next
+                    flag = .true.
+                end if
+                if (flag .and. associated(icdDT, DVT%icdDTHead)) exit
+            end do
+#endif
+            ! Record the maximum number of Voronoi vertices
             if (DVT%numIcdDT > maxNumVVT) maxNumVVT = DVT%numIcdDT
-            if (VC%SMP%bnd%numVtx /= DVT%numIcdDT) then
-                deallocate(VC%SMP%bnd%vtx)
-                VC%SMP%bnd%numVtx = DVT%numIcdDT
-                allocate(VC%SMP%bnd%vtx(VC%SMP%bnd%numVtx))
+            ! Set the spatial bound
+            if (VC%smp%bnd%numVtx /= DVT%numIcdDT) then
+                deallocate(VC%smp%bnd%vtx)
+                VC%smp%bnd%numVtx = DVT%numIcdDT
+                allocate(VC%smp%bnd%vtx(VC%smp%bnd%numVtx))
             end if
             icdDT => DVT%icdDTHead
             do j = 1, DVT%numIcdDT
-                VC%SMP%bnd%vtx(j)%lon = icdDT%ptr%cnt%lon
-                VC%SMP%bnd%vtx(j)%lat = icdDT%ptr%cnt%lat
+                VC%smp%bnd%vtx(j)%lon = icdDT%ptr%cnt%lon
+                VC%smp%bnd%vtx(j)%lat = icdDT%ptr%cnt%lat
                 icdDT => icdDT%next
             end do
-            call calcArea(VC%SMP%bnd%numVtx, &
-                VC%SMP%bnd%vtx(:)%lon, VC%SMP%bnd%vtx(:)%lat, VC%SMP%bnd%area)
-            if (VC%SMP%bnd%area < 0) then
+            call calcArea(VC%smp%bnd%numVtx, &
+                VC%smp%bnd%vtx(:)%lon, VC%smp%bnd%vtx(:)%lat, VC%smp%bnd%area)
+            if (VC%smp%bnd%area < 0) then
                 write(*, "('DVT', I5, ' has negative area!')") DVT%id
-                call VC%SMP%bnd%dump
+                call VC%smp%bnd%dump
             end if
 #if (defined DelaunayAndVoronoi_Debug)
-            totalArea = totalArea+VC%SMP%bnd%area
+            totalArea = totalArea+VC%smp%bnd%area
 #endif
             DVT => DVT%next
             VC => VC%next
@@ -636,14 +673,14 @@ contains
 
         DVT => DVTHead
         do i = 1, numDVT
-            lon(i) = real(DVT%SMP%lon)
-            lat(i) = real(DVT%SMP%lat)
+            lon(i) = real(DVT%smp%lon)
+            lat(i) = real(DVT%smp%lat)
             DVT => DVT%next
         end do
         DVT => VirtualDVTHead
         do i = 1, numVirtualDVT
-            lon(numDVT+i) = real(DVT%SMP%lon)
-            lat(numDVT+i) = real(DVT%SMP%lat)
+            lon(numDVT+i) = real(DVT%smp%lon)
+            lat(numDVT+i) = real(DVT%smp%lat)
             DVT => DVT%next
         end do
 
@@ -664,12 +701,12 @@ contains
 
         VC => VCHead
         do j = 1, numVC
-            do i = 1, VC%SMP%bnd%numVtx
-                lonVVT(i,j) = real(VC%SMP%bnd%vtx(i)%lon)
-                latVVT(i,j) = real(VC%SMP%bnd%vtx(i)%lat)
+            do i = 1, VC%smp%bnd%numVtx
+                lonVVT(i,j) = real(VC%smp%bnd%vtx(i)%lon)
+                latVVT(i,j) = real(VC%smp%bnd%vtx(i)%lat)
             end do
-            areaVC(j) = VC%SMP%bnd%area
-            numVVT(j) = VC%SMP%bnd%numVtx
+            areaVC(j) = VC%smp%bnd%area
+            numVVT(j) = VC%smp%bnd%numVtx
             VC => VC%next
         end do
 
@@ -728,14 +765,14 @@ contains
 
         DVT => DVTHead
         do i = 1, numDVT
-            lon(i) = real(DVT%SMP%lon)
-            lat(i) = real(DVT%SMP%lat)
+            lon(i) = real(DVT%smp%lon)
+            lat(i) = real(DVT%smp%lat)
             DVT => DVT%next
         end do
         DVT => VirtualDVTHead
         do i = 1, numVirtualDVT
-            lon(numDVT+i) = real(DVT%SMP%lon)
-            lat(numDVT+i) = real(DVT%SMP%lat)
+            lon(numDVT+i) = real(DVT%smp%lon)
+            lat(numDVT+i) = real(DVT%smp%lat)
             DVT => DVT%next
         end do
 
@@ -745,6 +782,7 @@ contains
         do i = 1, numDT
             do j = 1, 3
                 triangle(j,i) = DT%DVT(j)%ptr%id
+                ! This is problematic!!!
                 if (triangle(j,i) < 0) then
                     triangle(j,i) = numDVT-triangle(j,i)
                 end if
@@ -860,18 +898,18 @@ contains
                 DVT2%next => DVT1
             end if
             DVT1%id = -i
-            allocate(DVT1%SMP)
-            DVT1%SMP%id = -i
+            allocate(DVT1%smp)
+            DVT1%smp%id = -i
             DVT1%numIcdDT = 1
             allocate(DVT1%icdDTHead)
             DVT(i+3)%ptr => DVT1
-            call InverseRotationTransform(DVT(i)%ptr%SMP%lon, &
-                DVT(i)%ptr%SMP%lat, DVT1%SMP%lon, DVT1%SMP%lat, Zero, -PI05)
-            if (DVT1%SMP%lon < Zero) then
-                DVT1%SMP%lon = DVT1%SMP%lon+PI2
+            call InverseRotationTransform(DVT(i)%ptr%smp%lon, &
+                DVT(i)%ptr%smp%lat, DVT1%smp%lon, DVT1%smp%lat, Zero, -PI05)
+            if (DVT1%smp%lon < Zero) then
+                DVT1%smp%lon = DVT1%smp%lon+PI2
             end if
-            call CartesianTransformOnUnitSphere(DVT1%SMP%lon, DVT1%SMP%lat, &
-                DVT1%SMP%x, DVT1%SMP%y, DVT1%SMP%z)
+            call CartesianTransformOnUnitSphere(DVT1%smp%lon, DVT1%smp%lat, &
+                DVT1%smp%x, DVT1%smp%y, DVT1%smp%z)
         end do
 
         ! Create the first eight triangles .............................. STEP 2
@@ -891,9 +929,9 @@ contains
         end do
 
         ! Link the triangle with its vertices ........................... STEP 4
-        ret = Orient(DVT(1)%ptr%SMP%x, DVT(1)%ptr%SMP%y, DVT(1)%ptr%SMP%z, &
-                     DVT(2)%ptr%SMP%x, DVT(2)%ptr%SMP%y, DVT(2)%ptr%SMP%z, &
-                     DVT(3)%ptr%SMP%x, DVT(3)%ptr%SMP%y, DVT(3)%ptr%SMP%z)
+        ret = Orient(DVT(1)%ptr%smp%x, DVT(1)%ptr%smp%y, DVT(1)%ptr%smp%z, &
+                     DVT(2)%ptr%smp%x, DVT(2)%ptr%smp%y, DVT(2)%ptr%smp%z, &
+                     DVT(3)%ptr%smp%x, DVT(3)%ptr%smp%y, DVT(3)%ptr%smp%z)
         if (ret == OrientLeft) then ! Counter-clockwise
             map = [1,2,3, 1,3,5, 1,5,6, 1,6,2, 4,3,2, 4,5,3, 4,6,5, 4,2,6]
         else if (ret == OrientRight) then ! Clockwise
@@ -1167,13 +1205,13 @@ contains
 
 #if (defined DelaunayAndVoronoi_Debug)
         print *, "Deleting vertex", DVT%id, "..."
-        call DVT%SMP%dump
-        linkDVT => DVT%linkDVTHead
-        do i = 1, DVT%numLinkDVT
-            call linkDVT%ptr%SMP%dump
-            linkDVT => linkDVT%next
-        end do
-        read(*, *)
+        !call DVT%smp%dump
+        !linkDVT => DVT%linkDVTHead
+        !do i = 1, DVT%numLinkDVT
+        !    call linkDVT%ptr%smp%dump
+        !    linkDVT => linkDVT%next
+        !end do
+        !read(*, *)
 #endif
 
         icdDT => DVT%icdDTHead
@@ -1185,18 +1223,18 @@ contains
             DVT2 => linkDVT%next%ptr
             DVT3 => linkDVT%next%next%ptr
             ! Check 1: Is potential DT convex?
-            ret = Orient(DVT1%SMP%x, DVT1%SMP%y, DVT1%SMP%z, &
-                         DVT2%SMP%x, DVT2%SMP%y, DVT2%SMP%z, &
-                         DVT3%SMP%x, DVT3%SMP%y, DVT3%SMP%z)
+            ret = Orient(DVT1%smp%x, DVT1%smp%y, DVT1%smp%z, &
+                         DVT2%smp%x, DVT2%smp%y, DVT2%smp%z, &
+                         DVT3%smp%x, DVT3%smp%y, DVT3%smp%z)
             if (ret == OrientRight) then
                 icdDT => icdDT%next
                 linkDVT => linkDVT%next
                 cycle ! NOT PASS
             end if
             ! Check 2: Does potential DT contain DVT?
-            ret = Orient(DVT3%SMP%x, DVT3%SMP%y, DVT3%SMP%z, &
-                         DVT1%SMP%x, DVT1%SMP%y, DVT1%SMP%z, &
-                         DVT%SMP%x,  DVT%SMP%y,  DVT%SMP%z)
+            ret = Orient(DVT3%smp%x, DVT3%smp%y, DVT3%smp%z, &
+                         DVT1%smp%x, DVT1%smp%y, DVT1%smp%z, &
+                         DVT%smp%x,  DVT%smp%y,  DVT%smp%z)
             if (ret == OrientLeft) then
                 icdDT => icdDT%next
                 linkDVT => linkDVT%next
@@ -1206,11 +1244,11 @@ contains
             empty = .true.
             restDVT => linkDVT%next%next%next
             do i = 1, DVT%numIcdDT-3
-                ret = InCircle(DVT1%SMP%x, DVT1%SMP%y, DVT1%SMP%z, &
-                               DVT2%SMP%x, DVT2%SMP%y, DVT2%SMP%z, &
-                               DVT3%SMP%x, DVT3%SMP%y, DVT3%SMP%z, &
-                               restDVT%ptr%SMP%x, restDVT%ptr%SMP%y, &
-                               restDVT%ptr%SMP%z)
+                ret = InCircle(DVT1%smp%x, DVT1%smp%y, DVT1%smp%z, &
+                               DVT2%smp%x, DVT2%smp%y, DVT2%smp%z, &
+                               DVT3%smp%x, DVT3%smp%y, DVT3%smp%z, &
+                               restDVT%ptr%smp%x, restDVT%ptr%smp%y, &
+                               restDVT%ptr%smp%z)
                 if (ret == InsideCircle) then
                     empty = .false.
                     exit
@@ -1486,10 +1524,10 @@ contains
             ! DT is at the last level without being subdivided ......... ENTRY 2
             onPlane = 0
             ! Check edge 3->1
-            ret = Orient(DT%DVT(3)%ptr%SMP%x, DT%DVT(3)%ptr%SMP%y, &
-                         DT%DVT(3)%ptr%SMP%z, DT%DVT(1)%ptr%SMP%x, &
-                         DT%DVT(1)%ptr%SMP%y, DT%DVT(1)%ptr%SMP%z, &
-                         DVT%SMP%x, DVT%SMP%y, DVT%SMP%z)
+            ret = Orient(DT%DVT(3)%ptr%smp%x, DT%DVT(3)%ptr%smp%y, &
+                         DT%DVT(3)%ptr%smp%z, DT%DVT(1)%ptr%smp%x, &
+                         DT%DVT(1)%ptr%smp%y, DT%DVT(1)%ptr%smp%z, &
+                         DVT%smp%x, DVT%smp%y, DVT%smp%z)
             if (ret == OrientRight) then
                 found = .false.
                 return
@@ -1497,10 +1535,10 @@ contains
                 onPlane(1) = 2
             end if
             ! Check edge 2->3
-            ret = Orient(DT%DVT(2)%ptr%SMP%x, DT%DVT(2)%ptr%SMP%y, &
-                         DT%DVT(2)%ptr%SMP%z, DT%DVT(3)%ptr%SMP%x, &
-                         DT%DVT(3)%ptr%SMP%y, DT%DVT(3)%ptr%SMP%z, &
-                         DVT%SMP%x, DVT%SMP%y, DVT%SMP%z)
+            ret = Orient(DT%DVT(2)%ptr%smp%x, DT%DVT(2)%ptr%smp%y, &
+                         DT%DVT(2)%ptr%smp%z, DT%DVT(3)%ptr%smp%x, &
+                         DT%DVT(3)%ptr%smp%y, DT%DVT(3)%ptr%smp%z, &
+                         DVT%smp%x, DVT%smp%y, DVT%smp%z)
             if (ret == OrientRight) then
                 found = .false.
                 return
@@ -1533,8 +1571,8 @@ contains
                 call MsgManager_Speak(Error, "DVT "//trim(int2str(DVT%id))// &
                     " coincides with vertex 3 of DT "//trim(int2str(DT%id)))
                 call PrintTriangleTopology(DT)
-                print *, DVT%SMP%x, DVT%SMP%y, DVT%SMP%z
-                print *, DT%DVT(3)%ptr%SMP%x, DT%DVT(3)%ptr%SMP%y, DT%DVT(3)%ptr%SMP%z
+                print *, DVT%smp%x, DVT%smp%y, DVT%smp%z
+                print *, DT%DVT(3)%ptr%smp%x, DT%DVT(3)%ptr%smp%y, DT%DVT(3)%ptr%smp%z
                 call RunManager_EndRun
             end if
         end if
@@ -1564,24 +1602,23 @@ contains
                 if (associated(icdDT1%ptr%DVT(i)%ptr, DVT)) then
                     if (.not. associated(DVT%linkDVTHead)) then
                         allocate(DVT%linkDVTHead)
-                        DVT%numLinkDVT = 1
                         linkDVT1 => DVT%linkDVTHead
                     else
-                        allocate(linkDVT1%next)
-                        DVT%numLinkDVT = DVT%numLinkDVT+1
                         linkDVT2 => linkDVT1
+                        allocate(linkDVT1%next)
                         linkDVT1 => linkDVT1%next
                         linkDVT1%prev => linkDVT2
                         linkDVT2%next => linkDVT1
                     end if
+                    DVT%numLinkDVT = DVT%numLinkDVT+1
                     linkDVT1%ptr => icdDT1%ptr%DVT(ip1(i))%ptr
                     if (associated(linkDVT1%ptr, DVT%linkDVTHead%ptr) .and. &
                         DVT%numLinkDVT > 1) then
                         ! The ring has formed.
                         linkDVT2%next => DVT%linkDVTHead
                         DVT%linkDVTHead%prev => linkDVT2
-                        icdDT1%next => DVT%icdDTHead
-                        DVT%icdDTHead%prev => icdDT1
+                        icdDT2%next => DVT%icdDTHead
+                        DVT%icdDTHead%prev => icdDT2
                         DVT%numIcdDT = DVT%numIcdDT-1
                         DVT%numLinkDVT = DVT%numLinkDVT-1
                         exit IncidentDTLoop
@@ -1590,12 +1627,12 @@ contains
                 end if
             end do
             ! Shift to next incident DT
-            allocate(icdDT1%next)
-            DVT%numIcdDT = DVT%numIcdDT+1
             icdDT2 => icdDT1
+            allocate(icdDT1%next)
             icdDT1 => icdDT1%next
             icdDT1%prev => icdDT2
             icdDT2%next => icdDT1
+            DVT%numIcdDT = DVT%numIcdDT+1
             icdDT1%ptr => icdDT2%ptr%adjDT(ip1(i))%ptr
         end do IncidentDTLoop
 
@@ -1667,13 +1704,13 @@ contains
 
         ! Copy for short-hand
         do i = 1, 3
-            x(i) = DT%DVT(i)%ptr%SMP%x
-            y(i) = DT%DVT(i)%ptr%SMP%y
-            z(i) = DT%DVT(i)%ptr%SMP%z
+            x(i) = DT%DVT(i)%ptr%smp%x
+            y(i) = DT%DVT(i)%ptr%smp%y
+            z(i) = DT%DVT(i)%ptr%smp%z
         end do
-        x0 = DVT%SMP%x
-        y0 = DVT%SMP%y
-        z0 = DVT%SMP%z
+        x0 = DVT%smp%x
+        y0 = DVT%smp%y
+        z0 = DVT%smp%z
 
         k = 0
         do i = 1, 3
@@ -1722,19 +1759,19 @@ contains
         do i = 1, 3
             if (DT%DVT(i)%ptr%id < 0) then
                 ! For virtual DVT, first judge whether DVT overlaps it.
-                if (abs(DT%DVT(i)%ptr%SMP%lon-DVT%SMP%lon) < eps .and. &
-                    abs(DT%DVT(i)%ptr%SMP%lat-DVT%SMP%lat) < eps) then
+                if (abs(DT%DVT(i)%ptr%smp%lon-DVT%smp%lon) < eps .and. &
+                    abs(DT%DVT(i)%ptr%smp%lat-DVT%smp%lat) < eps) then
                     InTriangleRelaxed = -i
                     return
                 end if
             end if
-            x(i) = DT%DVT(i)%ptr%SMP%x
-            y(i) = DT%DVT(i)%ptr%SMP%y
-            z(i) = DT%DVT(i)%ptr%SMP%z
+            x(i) = DT%DVT(i)%ptr%smp%x
+            y(i) = DT%DVT(i)%ptr%smp%y
+            z(i) = DT%DVT(i)%ptr%smp%z
         end do
-        x0 = DVT%SMP%x
-        y0 = DVT%SMP%y
-        z0 = DVT%SMP%z
+        x0 = DVT%smp%x
+        y0 = DVT%smp%y
+        z0 = DVT%smp%z
 
         k = 0
         do i = 1, 3
@@ -1787,13 +1824,13 @@ contains
         real(RealKind) dx(3), dy(3), dz(3), x0, y0, z0, det
         integer i
 
-        x0 = DVT%SMP%x
-        y0 = DVT%SMP%y
-        z0 = DVT%SMP%z
+        x0 = DVT%smp%x
+        y0 = DVT%smp%y
+        z0 = DVT%smp%z
         do i = 1, 3
-            dx(i) = DT%DVT(i)%ptr%SMP%x-x0
-            dy(i) = DT%DVT(i)%ptr%SMP%y-y0
-            dz(i) = DT%DVT(i)%ptr%SMP%z-z0
+            dx(i) = DT%DVT(i)%ptr%smp%x-x0
+            dy(i) = DT%DVT(i)%ptr%smp%y-y0
+            dz(i) = DT%DVT(i)%ptr%smp%z-z0
         end do
 
         det = dx(3)*(dy(2)*dz(1)-dy(1)*dz(2)) &
@@ -1839,7 +1876,7 @@ contains
 
     subroutine CalcCircumcircle
         type(DelaunayTriangle), pointer :: DT
-        real(RealKind) E2(3), E3(3), N(3), L, C(3), tmp
+        real(RealKind) E2(3), E3(3), N(3), L, tmp
         integer i
 
 #if (!defined DelaunayAndVoronoi_FullSpeed)
@@ -1848,12 +1885,12 @@ contains
 
         DT => DTHead
         do i = 1, numDT
-            E3 = [DT%DVT(2)%ptr%SMP%x-DT%DVT(1)%ptr%SMP%x, &
-                  DT%DVT(2)%ptr%SMP%y-DT%DVT(1)%ptr%SMP%y, &
-                  DT%DVT(2)%ptr%SMP%z-DT%DVT(1)%ptr%SMP%z]
-            E2 = [DT%DVT(3)%ptr%SMP%x-DT%DVT(1)%ptr%SMP%x, &
-                  DT%DVT(3)%ptr%SMP%y-DT%DVT(1)%ptr%SMP%y, &
-                  DT%DVT(3)%ptr%SMP%z-DT%DVT(1)%ptr%SMP%z]
+            E3 = [DT%DVT(2)%ptr%smp%x-DT%DVT(1)%ptr%smp%x, &
+                  DT%DVT(2)%ptr%smp%y-DT%DVT(1)%ptr%smp%y, &
+                  DT%DVT(2)%ptr%smp%z-DT%DVT(1)%ptr%smp%z]
+            E2 = [DT%DVT(3)%ptr%smp%x-DT%DVT(1)%ptr%smp%x, &
+                  DT%DVT(3)%ptr%smp%y-DT%DVT(1)%ptr%smp%y, &
+                  DT%DVT(3)%ptr%smp%z-DT%DVT(1)%ptr%smp%z]
             N = [E3(2)*E2(3)-E3(3)*E2(2), &
                  E3(3)*E2(1)-E3(1)*E2(3), &
                  E3(1)*E2(2)-E3(2)*E2(1)]
@@ -1866,15 +1903,17 @@ contains
                 call RunManager_EndRun
             end if
             L = sqrt(L)
-            C = N/L
+            DT%cnt%x = N(1)/L
+            DT%cnt%y = N(2)/L
+            DT%cnt%z = N(3)/L
             call InverseCartesianTransformOnUnitSphere( &
-                DT%cnt%lon, DT%cnt%lat, C(1), C(2), C(3))
+                DT%cnt%lon, DT%cnt%lat, DT%cnt%x, DT%cnt%y, DT%cnt%z)
             if (DT%cnt%lon < Zero) then
                 DT%cnt%lon = DT%cnt%lon+PI2
             end if
-            tmp = (DT%DVT(1)%ptr%SMP%x*C(1)+ &
-                   DT%DVT(1)%ptr%SMP%y*C(2)+ &
-                   DT%DVT(1)%ptr%SMP%z*C(3))
+            tmp = (DT%DVT(1)%ptr%smp%x*DT%cnt%x+ &
+                   DT%DVT(1)%ptr%smp%y*DT%cnt%y+ &
+                   DT%DVT(1)%ptr%smp%z*DT%cnt%z)
             DT%radius = acos(tmp)
             DT => DT%next
         end do
@@ -2054,8 +2093,14 @@ contains
         type(DelaunayVertex), intent(in), target :: delDVT
 
         type(DelaunayVertexPointerList), pointer :: linkDVT
+#if (defined DelaunayAndVoronoi_Debug)
+        integer count
+        count = 0
+#endif
 
 #if (!defined DelaunayAndVoronoi_FullSpeed)
+        call MsgManager_RecordSpeaker("DeleteLinkVertex")
+
 #if (defined DelaunayAndVoronoi_Debug && DVT_ID)
         if (DVT%id == DVT_ID) then
             print *, "DVT", DVT%id, "is in DeleteLinkVertex to delete DVT", delDVT%id
@@ -2082,9 +2127,21 @@ contains
                     call PrintVertexTopology(DVT)
                 end if
 #endif
+                call MsgManager_DeleteSpeaker
 #endif
                 return
             end if
+#if (!defined DelaunayAndVoronoi_FullSpeed)
+#if (defined DelaunayAndVoronoi_Debug)
+            count = count+1
+            if (count > DVT%numLinkDVT) then
+                call MsgManager_Speak(Error, "DVT "// &
+                    trim(int2str(delDVT%id))//" is not a link DVT to DVT "// &
+                    trim(int2str(DVT%id)))
+                call RunManager_EndRun
+            end if
+#endif
+#endif
             linkDVT => linkDVT%next
         end do
 
@@ -2371,9 +2428,9 @@ contains
         write(*, "('Voronoi cell ID - ')", advance="no")
         write(*, *) trim(int2str(VC%id))
         write(*, "('  Vertex coordinate (in degree): ')")
-        do i = 1, VC%SMP%bnd%numVtx
+        do i = 1, VC%smp%bnd%numVtx
             write(*, "(2F10.3)") &
-                VC%SMP%bnd%vtx(i)%lon*Rad2Deg, VC%SMP%bnd%vtx(i)%lat*Rad2Deg
+                VC%smp%bnd%vtx(i)%lon*Rad2Deg, VC%smp%bnd%vtx(i)%lat*Rad2Deg
         end do
     
     end subroutine PrintVoronoiCell

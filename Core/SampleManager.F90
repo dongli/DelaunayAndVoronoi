@@ -32,7 +32,7 @@ module SampleManager
     public Point, Sample
 
     public numSample
-    public SMPHead
+    public smpHead
 
     ! ======================================================================= !
     type Point
@@ -74,7 +74,7 @@ module SampleManager
     end type
 
     integer :: numSample = 0
-    type(Sample), pointer :: SMPHead => null()
+    type(Sample), pointer :: smpHead => null()
 
     integer, parameter :: maxNumVtx = 20
 
@@ -90,7 +90,7 @@ contains
         integer, intent(in) :: n
     
         integer i
-        type(Sample), pointer :: SMP1, SMP2
+        type(Sample), pointer :: smp1, smp2
 
 #if (!defined FullSpeed)
         call MsgManager_RecordSpeaker("SampleManager_Init")
@@ -100,20 +100,20 @@ contains
 
         do i = 1, numSample
             if (i == 1) then
-                allocate(SMPHead)
-                SMP1 => SMPHead
+                allocate(smpHead)
+                smp1 => smpHead
             else
-                SMP2 => SMP1
-                allocate(SMP1%next)
-                SMP1 => SMP1%next
-                SMP1%prev => SMP2
-                SMP2%next => SMP1
+                smp2 => smp1
+                allocate(smp1%next)
+                smp1 => smp1%next
+                smp1%prev => smp2
+                smp2%next => smp1
             end if
-            SMP1%id = i
-            SMP1%bnd%numVtx = 1
-            allocate(SMP1%bnd%vtx(1))
-            SMP1%oldBnd%numVtx = 1
-            allocate(SMP1%oldBnd%vtx(1))
+            smp1%id = i
+            smp1%bnd%numVtx = 1
+            allocate(smp1%bnd%vtx(1))
+            smp1%oldBnd%numVtx = 1
+            allocate(smp1%oldBnd%vtx(1))
         end do
 
 #if (!defined FullSpeed)
@@ -133,7 +133,7 @@ contains
         real(RealKind), intent(in) :: lon(:), lat(:)
 
         integer i, dimSize(1)
-        type(Sample), pointer :: SMP1
+        type(Sample), pointer :: smp1
 
 #if (!defined FullSpeed)
         call MsgManager_RecordSpeaker("SampleManager_Set")
@@ -148,15 +148,15 @@ contains
             ! Complain
         end if
 
-        SMP1 => SMPHead
+        smp1 => smpHead
         do i = 1, numSample
-            SMP1%lon = lon(i)
-            SMP1%lat = lat(i)
+            smp1%lon = lon(i)
+            smp1%lat = lat(i)
 #if (defined TTS_Online)
-            call MeshManager_LocationCheck([lon(i),lat(i)], SMP1%loc)
+            call MeshManager_LocationCheck([lon(i),lat(i)], smp1%loc)
 #endif
-            call SMP1%CartesianTransform
-            SMP1 => SMP1%next
+            call smp1%CartesianTransform
+            smp1 => smp1%next
         end do
 
 #if (!defined FullSpeed)
@@ -167,13 +167,13 @@ contains
     end subroutine SampleManager_Set
 
     subroutine SampleManager_SaveSpatialBound
-        type(Sample), pointer :: SMP
+        type(Sample), pointer :: smp
         integer i
 
-        SMP => SMPHead
+        smp => smpHead
         do i = 1, numSample
-            call SMP%oldBnd%clone(SMP%bnd)
-            SMP => SMP%next
+            call smp%oldBnd%clone(smp%bnd)
+            smp => smp%next
         end do
             
     end subroutine SampleManager_SaveSpatialBound
@@ -197,45 +197,45 @@ contains
     
     end subroutine SpatialBound_setVertex
     
-    subroutine Sample_getCoordinate(SMP, x)
-        class(Sample), intent(in) :: SMP
+    subroutine Sample_getCoordinate(smp, x)
+        class(Sample), intent(in) :: smp
         real(RealKind), intent(out) :: x(2)
 
-        x = [SMP%lon,SMP%lat]
+        x = [smp%lon,smp%lat]
     
     end subroutine Sample_getCoordinate
 
-    subroutine Sample_setCoordinate(SMP, x)
-        class(Sample), intent(inout) :: SMP
+    subroutine Sample_setCoordinate(smp, x)
+        class(Sample), intent(inout) :: smp
         real(RealKind), intent(in) :: x(2)
 
-        SMP%lon = x(1)
-        SMP%lat = x(2)
+        smp%lon = x(1)
+        smp%lat = x(2)
         
     end subroutine Sample_setCoordinate
 
-    subroutine Sample_CartesianTransform(SMP)
-        class(Sample), intent(inout) :: SMP
+    subroutine Sample_CartesianTransform(smp)
+        class(Sample), intent(inout) :: smp
 
         call CartesianTransformOnUnitSphere( &
-            SMP%lon, SMP%lat, SMP%x, SMP%y, SMP%z)
+            smp%lon, smp%lat, smp%x, smp%y, smp%z)
     
     end subroutine Sample_CartesianTransform
     
 #if (defined TTS_Online)
-    subroutine Sample_getLocation(SMP, loc)
-        class(Sample), intent(in) :: SMP
+    subroutine Sample_getLocation(smp, loc)
+        class(Sample), intent(in) :: smp
         type(Location), intent(out) :: loc
     
-        loc = SMP%loc
+        loc = smp%loc
 
     end subroutine Sample_getLocation
 
-    subroutine Sample_setLocation(SMP, loc)
-        class(Sample), intent(inout) :: SMP
+    subroutine Sample_setLocation(smp, loc)
+        class(Sample), intent(inout) :: smp
         type(Location), intent(in) :: loc
 
-        SMP%loc = loc
+        smp%loc = loc
 
     end subroutine Sample_setLocation
 #endif
@@ -301,7 +301,7 @@ contains
     subroutine SampleManager_Output(fcard)
         type(FileCard), intent(inout) :: fcard
 
-        type(Sample), pointer :: SMP
+        type(Sample), pointer :: smp
         real(RealKind) lon(numSample), lat(numSample)
         integer numBndVtx(numSample)
         real(RealKind) lonBndVtx(maxNumVtx,numSample)
@@ -313,31 +313,31 @@ contains
         real(RealKind) areaVoro(numSample)
         integer i, j
 
-        SMP => SMPHead
+        smp => smpHead
         do i = 1, numSample
-            lon(i) = SMP%lon
-            lat(i) = SMP%lat
-            numBndVtx(i) = SMP%oldBnd%numVtx
-            areaBnd(i) = SMP%oldBnd%area
-            do j = 1, SMP%oldBnd%numVtx
-                lonBndVtx(j,i) = SMP%oldBnd%vtx(j)%lon
-                latBndVtx(j,i) = SMP%oldBnd%vtx(j)%lat
+            lon(i) = smp%lon
+            lat(i) = smp%lat
+            numBndVtx(i) = smp%oldBnd%numVtx
+            areaBnd(i) = smp%oldBnd%area
+            do j = 1, smp%oldBnd%numVtx
+                lonBndVtx(j,i) = smp%oldBnd%vtx(j)%lon
+                latBndVtx(j,i) = smp%oldBnd%vtx(j)%lat
             end do
-            if (SMP%bnd%numVtx > maxNumVtx) then
+            if (smp%bnd%numVtx > maxNumVtx) then
                 call MsgManager_Speak(Error, "maxNumVtx has been exceeded.")
                 print *, "The dirty vertices:"
-                do j = 1, SMP%bnd%numVtx
-                    print *, SMP%bnd%vtx(j)%lon*Rad2Deg, SMP%bnd%vtx(j)%lat*Rad2Deg
+                do j = 1, smp%bnd%numVtx
+                    print *, smp%bnd%vtx(j)%lon*Rad2Deg, smp%bnd%vtx(j)%lat*Rad2Deg
                 end do
                 call RunManager_EndRun
             end if
-            numVoroVtx(i) = SMP%bnd%numVtx
-            areaVoro(i) = SMP%bnd%area
-            do j = 1, SMP%bnd%numVtx
-                lonVoroVtx(j,i) = SMP%bnd%vtx(j)%lon
-                latVoroVtx(j,i) = SMP%bnd%vtx(j)%lat
+            numVoroVtx(i) = smp%bnd%numVtx
+            areaVoro(i) = smp%bnd%area
+            do j = 1, smp%bnd%numVtx
+                lonVoroVtx(j,i) = smp%bnd%vtx(j)%lon
+                latVoroVtx(j,i) = smp%bnd%vtx(j)%lat
             end do
-            SMP => SMP%next
+            smp => smp%next
         end do
 
         call NFWrap_Output1DVar(fcard, "lon", lon)
@@ -353,15 +353,15 @@ contains
 
     end subroutine SampleManager_Output
  
-    subroutine Sample_dump(SMP)
-        class(Sample), intent(in) :: SMP
+    subroutine Sample_dump(smp)
+        class(Sample), intent(in) :: smp
 
         write(*, "('Sample ID - ')", advance="no")
-        write(*, *) SMP%id
+        write(*, *) smp%id
         write(*, "('  Spherical coordinate: ', 2F20.15)") &
-            SMP%lon*Rad2Deg, SMP%lat*Rad2Deg
+            smp%lon*Rad2Deg, smp%lat*Rad2Deg
         write(*, "('  Cartesian coordinate: ', 3F20.15)") &
-            SMP%x, SMP%y, SMP%z
+            smp%x, smp%y, smp%z
 
     end subroutine Sample_dump
 

@@ -6,6 +6,12 @@ if [ $? != 0 ]; then
     exit -1
 fi
 
+ls *.nc > /dev/null 2>&1
+if [ $? != 0 ]; then
+    echo "*** There is no NetCDF data file!"
+    exit -2
+fi
+
 echo "Input the NetCDF data file or wildcard:"
 echo "Possible files:"
 files=$(ls -t *.nc)
@@ -45,7 +51,7 @@ fi
 
 mapProj="CE"
 echo "Input map projection (NH/SH/CE/ST):"
-read -p "[Default: CE] > " ans
+read -p "[Default: $mapProj] > " ans
 if [ -n "$ans" ]; then
     mapProj=$ans
 fi
@@ -58,7 +64,7 @@ minLat="80"
 if [ $mapProj == "NH" ]; then
     echo "Northen stereographic projection is used."
     echo "Input the southest latitude to view:"
-    read -p "[Default: 80] > " ans
+    read -p "[Default: $minLat] > " ans
     if [ -n "$ans" ]; then
         minLat=$ans
     fi
@@ -68,7 +74,7 @@ maxLat="-80"
 if [ $mapProj == "SH" ]; then
     echo "** Southen stereographic projection is used."
     echo "Input the northest latitude to view:"
-    read -p "[Default: -80] > " ans
+    read -p "[Default: $maxLat] > " ans
     if [ -n "$ans" ]; then
         maxLat=$ans
     fi
@@ -79,7 +85,7 @@ latCnt="0"
 if [ $mapProj == "ST" ]; then
     echo "** Satellite projection is used."
     echo "Input the center of viewport:"
-    read -p "[Default: lon=180, lat=0]> " ans1 ans2
+    read -p "[Default: lon=$lonCnt, lat=$latCnt] > " ans1 ans2
     if [ -n "$ans1" -a -n "$ans2" ]; then
         lonCnt=$ans1
         latCnt=$ans2
@@ -88,7 +94,7 @@ fi
 
 figtype="pdf"
 echo "Input figure type: (pdf/x11)"
-read -p "[Default: pdf]> " ans
+read -p "[Default: $figtype] > " ans
 if [ -n "$ans" ]; then
     figtype=$ans
 fi
@@ -108,7 +114,7 @@ do
 
         f = addfile("$file", "r")
 
-        numPoint = dimsizes(f->lonPnt)
+        numPnt = dimsizes(f->lonPnt)
 
         hasDelaunay = False
         if (isfilevar(f, "triIdx")) then
@@ -176,7 +182,7 @@ do
             textRes@txFontHeightF = 0.01
             textRes@txFont = "helvetica-bold"
 
-            do i = 0, numPoint-1
+            do i = 0, numPnt-1
                 text = gsn_add_text(wks, map, sprinti("%d", i+1), \
                     lonPnt(i)-0.5, latPnt(i)-0.5, textRes)
             end do
@@ -197,11 +203,9 @@ do
                 n = 0
                 do j = 0, 2
                     k = f->triIdx(i,j)-1
-                    if (k .ge. 0) then
-                        lon(n) = lonPnt(k)
-                        lat(n) = latPnt(k)
-                        n = n+1
-                    end if
+                    lon(n) = lonPnt(k)
+                    lat(n) = latPnt(k)
+                    n = n+1
                 end do
                 if (n .gt. 1) then
                     lon(n) = lon(0)
@@ -220,7 +224,7 @@ do
             edgeRes@gsLineThicknessF = 0.5
             edgeRes@gsLineColor = "red"
 
-            do i = 0, numPoint-1
+            do i = 0, numPnt-1
                 lon = new(f->numVtx(i)+1, "float")
                 lat = new(f->numVtx(i)+1, "float")
                 do j = 0, f->numVtx(i)-1
