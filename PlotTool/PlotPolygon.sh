@@ -27,14 +27,15 @@ if [ -n "$ans" ]; then
     mapProj=$ans
 fi
 
+lonCnt="180"
+latCnt="0"
+angle="1"
+
 if [ $mapProj == "CE" ]; then
     echo "** Cylindrical equidistant projection is used."
 fi
 
 if [ $mapProj == "ST" ]; then
-    lonCnt="180"
-    latCnt="0"
-    angle="1"
     echo "** Satellite projection is used."
     echo "Input the center of viewport:"
     read -p "[Default: lon=$lonCnt, lat=$latCnt] > " ans1 ans2
