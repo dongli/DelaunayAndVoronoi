@@ -2,8 +2,12 @@
 ! SampleManager module                                                        !
 !                                                                             !
 ! Description:                                                                !
+!                                                                             !
 !   This module manages sample data structure and provides interface for      !
-!   other modules.
+!   other modules.                                                            !
+!                                                                             !
+!   Also the spatial bounds of each sample are defined and managed, which     !
+!   represent the volume of the sample.                                       !
 !                                                                             !
 ! Author:                                                                     !
 !   DONG Li, dongli@lasg.iap.ac.cn                                            !
@@ -40,9 +44,15 @@ module SampleManager
         real(RealKind) x, y, z
     end type Point
 
+    type SpatialBoundEdge
+        type(Point), pointer :: endPnt1, endPnt2
+        integer :: numIntPnt = 0 ! Intersection points
+        type(Point), pointer :: intPntHead => null()
+    end type SpatialBoundEdge
+
     type SpatialBound
-        integer :: numVtx = 0
-        type(Point), allocatable :: vtx(:)
+        integer :: numEdge = 0
+        type(SpatialBoundEdge), allocatable :: edges(:)
         real(RealKind) area
     contains
         procedure :: dump => SpatialBound_dump
@@ -76,7 +86,7 @@ module SampleManager
     integer :: numSample = 0
     type(Sample), pointer :: smpHead => null()
 
-    integer, parameter :: maxNumVtx = 20
+    integer, parameter :: maxNumVtx = 10
 
 contains
     
@@ -89,7 +99,7 @@ contains
     subroutine SampleManager_Init(n)
         integer, intent(in) :: n
     
-        integer i
+        integer i, j
         type(Sample), pointer :: smp1, smp2
 
 #if (!defined FullSpeed)
@@ -99,6 +109,7 @@ contains
         numSample = n
 
         do i = 1, numSample
+            ! Create a sample
             if (i == 1) then
                 allocate(smpHead)
                 smp1 => smpHead
@@ -110,10 +121,17 @@ contains
                 smp2%next => smp1
             end if
             smp1%id = i
-            smp1%bnd%numVtx = 1
-            allocate(smp1%bnd%vtx(1))
-            smp1%oldBnd%numVtx = 1
-            allocate(smp1%oldBnd%vtx(1))
+            ! "bnd" is Voronoi cell of the sample at new time step.
+            smp1%bnd%numEdge = 6
+            allocate(smp1%bnd%edges(smp1%bnd%numEdge))
+            ! "oldBnd" is spatial bound of the "old" sample at new time step.
+            smp1%oldBnd%numEdge = 6
+            allocate(smp1%oldBnd%edges(smp1%oldBnd%numEdge))
+            ! Pre-allocate the end points of spatial bounds.
+            do j = 1, smp1%oldBnd%numEdge
+                allocate(smp1%oldBnd%edges(j)%endPnt1)
+                allocate(smp1%oldBnd%edges(j)%endPnt2)
+            end do
         end do
 
 #if (!defined FullSpeed)
@@ -141,11 +159,19 @@ contains
 
         dimSize = shape(lon)
         if (dimSize(1) /= numSample) then
-            ! Complain
+            call MsgManager_Speak(Error, &
+                "The dimensions of ""lon"" are not matched ("// &
+                trim(int2str(dimSize(1)))//" /= "// &
+                trim(int2str(numSample))//").")
+            call RunManager_EndRun
         end if
         dimSize = shape(lat)
         if (dimSize(1) /= numSample) then
-            ! Complain
+            call MsgManager_Speak(Error, &
+                "The dimensions of ""lat"" are not matched ("// &
+                trim(int2str(dimSize(1)))//" /= "// &
+                trim(int2str(numSample))//").")
+            call RunManager_EndRun
         end if
 
         smp1 => smpHead
@@ -183,7 +209,7 @@ contains
         integer, intent(in) :: i
         real(RealKind), intent(out) :: x(2)
 
-        x = [bnd%vtx(i)%lon,bnd%vtx(i)%lat]
+        x = [bnd%edges(i)%endPnt1%lon,bnd%edges(i)%endPnt1%lat]
 
     end subroutine SpatialBound_getVertex
 
@@ -192,8 +218,8 @@ contains
         integer, intent(in) :: i
         real(RealKind), intent(in) :: x(2)
 
-        bnd%vtx(i)%lon = x(1)
-        bnd%vtx(i)%lat = x(2)
+        bnd%edges(i)%endPnt1%lon = x(1)
+        bnd%edges(i)%endPnt1%lat = x(2)
     
     end subroutine SpatialBound_setVertex
     
@@ -248,9 +274,10 @@ contains
         write(*, "('Spatial bound')")
         write(*, "('  Area: ', F30.10)") bnd%area
         write(*, "('  Vertices:')")
-        do i = 1, bnd%numVtx
+        do i = 1, bnd%numEdge
             write(*, "('  ', 2F20.15)") &
-                bnd%vtx(i)%lon*Rad2Deg, bnd%vtx(i)%lat*Rad2Deg
+                bnd%edges(i)%endPnt1%lon*Rad2Deg, &
+                bnd%edges(i)%endPnt1%lat*Rad2Deg
         end do
     
     end subroutine SpatialBound_dump
@@ -259,13 +286,21 @@ contains
         class(SpatialBound), intent(inout) :: a
         type(SpatialBound), intent(in) :: b
 
-        if (a%numVtx /= b%numVtx) then
-            deallocate(a%vtx)
-            a%numVtx = b%numVtx
-            allocate(a%vtx(a%numVtx))
+        integer i
+
+        if (a%numEdge /= b%numEdge) then
+            deallocate(a%edges)
+            a%numEdge = b%numEdge
+            allocate(a%edges(a%numEdge))
+            do i = 1, a%numEdge
+                allocate(a%edges(i)%endPnt1)
+                allocate(a%edges(i)%endPnt2)
+            end do
         end if
-        a%vtx%lon = b%vtx%lon
-        a%vtx%lat = b%vtx%lat
+        do i = 1, a%numEdge
+            a%edges(i)%endPnt1%lon = b%edges(i)%endPnt1%lon
+            a%edges(i)%endPnt1%lat = b%edges(i)%endPnt1%lat
+        end do
         a%area = b%area
     
     end subroutine SpatialBound_clone
@@ -317,25 +352,26 @@ contains
         do i = 1, numSample
             lon(i) = smp%lon
             lat(i) = smp%lat
-            numBndVtx(i) = smp%oldBnd%numVtx
+            numBndVtx(i) = smp%oldBnd%numEdge
             areaBnd(i) = smp%oldBnd%area
-            do j = 1, smp%oldBnd%numVtx
-                lonBndVtx(j,i) = smp%oldBnd%vtx(j)%lon
-                latBndVtx(j,i) = smp%oldBnd%vtx(j)%lat
+            do j = 1, smp%oldBnd%numEdge
+                lonBndVtx(j,i) = smp%oldBnd%edges(j)%endPnt1%lon
+                latBndVtx(j,i) = smp%oldBnd%edges(j)%endPnt1%lat
             end do
-            if (smp%bnd%numVtx > maxNumVtx) then
+            if (smp%bnd%numEdge > maxNumVtx) then
                 call MsgManager_Speak(Error, "maxNumVtx has been exceeded.")
                 print *, "The dirty vertices:"
-                do j = 1, smp%bnd%numVtx
-                    print *, smp%bnd%vtx(j)%lon*Rad2Deg, smp%bnd%vtx(j)%lat*Rad2Deg
+                do j = 1, smp%bnd%numEdge
+                    print *, smp%bnd%edges(j)%endPnt1%lon*Rad2Deg, &
+                        smp%bnd%edges(j)%endPnt1%lat*Rad2Deg
                 end do
                 call RunManager_EndRun
             end if
-            numVoroVtx(i) = smp%bnd%numVtx
+            numVoroVtx(i) = smp%bnd%numEdge
             areaVoro(i) = smp%bnd%area
-            do j = 1, smp%bnd%numVtx
-                lonVoroVtx(j,i) = smp%bnd%vtx(j)%lon
-                latVoroVtx(j,i) = smp%bnd%vtx(j)%lat
+            do j = 1, smp%bnd%numEdge
+                lonVoroVtx(j,i) = smp%bnd%edges(j)%endPnt1%lon
+                latVoroVtx(j,i) = smp%bnd%edges(j)%endPnt1%lat
             end do
             smp => smp%next
         end do

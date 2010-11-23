@@ -26,7 +26,7 @@ endif
 # External libraries
 NETCDF_ROOT = $(strip $(subst /bin/ncdump, , $(shell which ncdump)))
 NETCDF_INC = -I$(NETCDF_ROOT)/include
-NETCDF_LIB = -L$(NETCDF_ROOT)/lib -lnetcdf -lcurl
+NETCDF_LIB = -L$(NETCDF_ROOT)/lib -lnetcdf
 
 LIBRARY = $(NETCDF_INC) $(NETCDF_LIB)
 

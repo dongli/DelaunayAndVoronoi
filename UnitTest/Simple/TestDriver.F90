@@ -6,7 +6,7 @@ program TestDriver
 
     implicit none
 
-    integer n
+    integer n, nx, ny
     real(RealKind), allocatable :: lon(:), lat(:)
     real(RealKind) dlon, dlat, dlon05, dlat05
     integer i, j, k
@@ -31,16 +31,18 @@ program TestDriver
         lon = [45.0,30.0,60.0,45.0,60.0,70.0,31.0,45.0,80.0]/Rad2Deg
         lat = [60.0,30.0,30.0,45.0,10.0,55.0,40.0,50.0,35.0]/Rad2Deg
     else
-        n = 100
+        nx = 100
+        ny = 100
+        n = nx*ny
         allocate(lon(n))
         allocate(lat(n))
-        dlon = PI2/10
-        dlat = PI/10
+        dlon = PI2/nx
+        dlat = PI/ny
         dlon05 = dlon*0.5
         dlat05 = dlat*0.5
         k = 1
-        do j = 1, 10
-            do i = 1, 10
+        do j = 1, ny
+            do i = 1, nx
                 lon(k) = dlon05+(i-1)*dlon
                 lat(k) = PI05-dlat05-(j-1)*dlat
                 k = k+1
