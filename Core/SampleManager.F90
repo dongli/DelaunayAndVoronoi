@@ -33,8 +33,10 @@ module SampleManager
     public SampleManager_Output
     public SampleManager_SaveSpatialBound
 
-    public Point, Sample
+    public Point, SpatialBoundVertex, Sample
 
+    public numBndVtx
+    public bndVtxHead
     public numSample
     public smpHead
 
@@ -44,10 +46,17 @@ module SampleManager
         real(RealKind) x, y, z
     end type Point
 
+    type SpatialBoundVertex
+        type(Point) pnt
+        type(SpatialBoundVertex), pointer :: next => null()
+    end type SpatialBoundVertex
+
     type SpatialBoundEdge
         type(Point), pointer :: endPnt1, endPnt2
+#if (defined TTS_Online)
         integer :: numIntPnt = 0 ! Intersection points
         type(Point), pointer :: intPntHead => null()
+#endif
     end type SpatialBoundEdge
 
     type SpatialBound
@@ -61,6 +70,10 @@ module SampleManager
         procedure :: setVertex => SpatialBound_setVertex
     end type SpatialBound
 
+    integer :: numBndVtx = 0
+    type(SpatialBoundVertex), pointer :: bndVtxHead => null()
+
+    ! ======================================================================= !
     type, extends(Point) :: Sample
         integer :: id = -1
 #if (defined TTS_Online)

@@ -112,7 +112,7 @@ module DelaunayAndVoronoi
         ! For topology
         type(DelaunayVertexPointer) DVT(3)
         type(DelaunayTrianglePointer) adjDT(3) ! Three adjacent DTs
-        type(Point) cnt ! Center of circumcircle
+        type(Point), pointer :: cnt ! Center of circumcircle
         real(RealKind) radius ! Radius of circumcircle in radian
         ! For validation
         integer :: numSubDT = 0 ! the number of subdivided triangles
@@ -1902,6 +1902,7 @@ contains
 
     subroutine CalcCircumcircle
         type(DelaunayTriangle), pointer :: DT
+        type(SpatialBoundVertex), pointer :: bndVtx1, bndVtx2
         real(RealKind) E2(3), E3(3), N(3), L, tmp
         integer i
 
@@ -1929,6 +1930,16 @@ contains
                 call RunManager_EndRun
             end if
             L = sqrt(L)
+            if (i == 1) then
+                if (.not. associated(bndVtxHead)) allocate(bndVtxHead)
+                bndVtx1 => bndVtxHead
+            else
+                bndVtx2 => bndVtx1
+                if (.not. associated(bndVtx1%next)) allocate(bndVtx1%next)
+                bndVtx1 => bndVtx1%next
+                bndVtx2%next => bndVtx1
+            end if
+            DT%cnt => bndVtx1%pnt
             DT%cnt%x = N(1)/L
             DT%cnt%y = N(2)/L
             DT%cnt%z = N(3)/L
@@ -1940,6 +1951,9 @@ contains
             DT%radius = acos(tmp)
             DT => DT%next
         end do
+
+        ! Every spatial bound vertex corresponds to a triangle.
+        numBndVtx = numDT
 
 #if (!defined DelaunayAndVoronoi_FullSpeed && !defined FullSpeed)
         call MsgManager_Speak(Notice, "Finished.")
